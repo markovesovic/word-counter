@@ -3,9 +3,10 @@ package main;
 
 import directory_crawler.CrawlerJob;
 import directory_crawler.DirectoryCrawler;
+import job_dispatcher.JobDispatcher;
+import job_dispatcher.ScanningJob;
 
-import java.io.FileReader;
-import java.io.IOException;
+import java.io.*;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -21,9 +22,10 @@ public class Main {
     private static final Properties properties = new Properties();
 
     private static final ConcurrentLinkedQueue<CrawlerJob> directoryNames = new ConcurrentLinkedQueue<>();
+    private static final ConcurrentLinkedQueue<ScanningJob> scanningJobs = new ConcurrentLinkedQueue<>();
 
     private static DirectoryCrawler directoryCrawler;
-
+    private static JobDispatcher jobDispatcher;
 
     public static void main(String[] args) {
         loadProperties();
@@ -32,11 +34,18 @@ public class Main {
     }
 
     private static void initWorkers() {
+        // Directory crawler
         String fileCorpusPrefix = (String) properties.get("file_corpus_prefix");
         int dirCrawlerSleepTime = Integer.parseInt(String.valueOf(properties.get("dir_crawler_sleep_time")));
-        directoryCrawler = new DirectoryCrawler(directoryNames, fileCorpusPrefix, dirCrawlerSleepTime);
+        directoryCrawler = new DirectoryCrawler(directoryNames, scanningJobs, fileCorpusPrefix, dirCrawlerSleepTime);
         Thread directoryCrawlerThread = new Thread(directoryCrawler, "directoryCrawler");
         directoryCrawlerThread.start();
+
+        // Job dispatcher
+        jobDispatcher = new JobDispatcher(scanningJobs);
+        Thread jobDispatcherThread = new Thread(jobDispatcher, "jobDispatcher");
+        jobDispatcherThread.start();
+
     }
 
     private static void forever() {
@@ -45,9 +54,11 @@ public class Main {
         while(true) {
             String line = sc.nextLine();
 
+
             if(line.equals("stop")) {
                 System.out.println("Exiting. . .");
                 directoryCrawler.stop();
+                jobDispatcher.stop();
                 break;
             }
 

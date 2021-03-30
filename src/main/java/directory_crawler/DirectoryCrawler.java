@@ -1,26 +1,32 @@
 package directory_crawler;
 
+import job_dispatcher.FileScanningJob;
+import job_dispatcher.ScanningJob;
 import main.Stoppable;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.FileTime;
 import java.util.HashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class DirectoryCrawler implements Stoppable, Runnable {
 
-    private final ConcurrentLinkedQueue<CrawlerJob> directoryNames;
-    private final String fileCorpusPrefix;
-    private final int dirCrawlerSleepTime;
-
     private final HashMap<String, Long> lastModifiedValueForFiles = new HashMap<>();
     private boolean forever = true;
 
-    public DirectoryCrawler(ConcurrentLinkedQueue<CrawlerJob> directoryNames, String fileCorpusPrefix, int dirCrawlerSleepTime) {
+    private final ConcurrentLinkedQueue<CrawlerJob> directoryNames;
+    private final ConcurrentLinkedQueue<ScanningJob> scanningJobs;
+    private final String fileCorpusPrefix;
+    private final int dirCrawlerSleepTime;
+
+    public DirectoryCrawler(ConcurrentLinkedQueue<CrawlerJob> directoryNames,
+                            ConcurrentLinkedQueue<ScanningJob> scanningJobs,
+                            String fileCorpusPrefix,
+                            int dirCrawlerSleepTime) {
         this.directoryNames = directoryNames;
+        this.scanningJobs = scanningJobs;
         this.fileCorpusPrefix = fileCorpusPrefix;
         this.dirCrawlerSleepTime = dirCrawlerSleepTime;
     }
@@ -30,12 +36,13 @@ public class DirectoryCrawler implements Stoppable, Runnable {
         while(this.forever) {
 
             while(!this.directoryNames.isEmpty()) {
+                System.out.println("Start of queue loop");
                 // Get directory name
                 CrawlerJob crawlerJob = this.directoryNames.poll();
+                assert crawlerJob != null;
                 String directoryName = crawlerJob.getDirectoryName();
 
                 if(crawlerJob.isPoison()) {
-                    this.forever = false;
                     break;
                 }
 
@@ -105,7 +112,10 @@ public class DirectoryCrawler implements Stoppable, Runnable {
 
         // Add new job with current dir
         if(directory.getName().startsWith(this.fileCorpusPrefix) && isCorpus && isMatch) {
-            System.out.println("Adding dir: " + directory.getAbsolutePath());
+            FileScanningJob fileScanningJob = new FileScanningJob(directoryName);
+            this.scanningJobs.add(fileScanningJob);
+
+//            System.out.println("Adding dir: " + directory.getAbsolutePath());
             return;
         }
 
@@ -119,6 +129,7 @@ public class DirectoryCrawler implements Stoppable, Runnable {
     @Override
     public synchronized void stop() {
         notifyAll();
+        this.forever = false;
         this.directoryNames.add(new CrawlerJob());
     }
 }
