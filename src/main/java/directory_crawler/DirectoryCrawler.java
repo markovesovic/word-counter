@@ -16,7 +16,7 @@ public class DirectoryCrawler implements Stoppable, Runnable {
     private final String fileCorpusPrefix;
     private final int dirCrawlerSleepTime;
 
-    private final HashMap<Path, Integer> lastModifiedValueForFiles = new HashMap<>();
+    private final HashMap<String, Long> lastModifiedValueForFiles = new HashMap<>();
     private boolean forever = true;
 
     public DirectoryCrawler(ConcurrentLinkedQueue<CrawlerJob> directoryNames, String fileCorpusPrefix, int dirCrawlerSleepTime) {
@@ -65,30 +65,47 @@ public class DirectoryCrawler implements Stoppable, Runnable {
             return;
         }
 
+        // Check if corpus
         boolean isCorpus = true;
-
         for(File f : dirFiles) {
             if(f.isDirectory()) {
                 isCorpus = false;
             }
         }
 
+        // Check if change happened
         boolean isMatch = true;
+        int countOfSameFiles = 0;
         for(File f : dirFiles) {
             if(f.isDirectory()) {
                 continue;
             }
             try {
-                FileTime filetime = Files.getLastModifiedTime(Path.of(f.getAbsolutePath()));
-//                System.out.println(f.getAbsolutePath() + ": " + filetime.toString());
+                Long newLastModifiedTime = Files.getLastModifiedTime(Path.of(f.getAbsolutePath())).toMillis();
+                Long oldLastModifiedTime = this.lastModifiedValueForFiles.get(f.getAbsolutePath());
+
+                this.lastModifiedValueForFiles.put(f.getAbsolutePath(), newLastModifiedTime);
+
+                if(oldLastModifiedTime == null) {
+                    continue;
+                }
+
+                if(newLastModifiedTime.equals(oldLastModifiedTime)) {
+                    countOfSameFiles++;
+                }
+
+//                System.out.println(f.getAbsolutePath() + "   new: " + newLastModifiedTime + ", old: " + oldLastModifiedTime);
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
+        if(countOfSameFiles == dirFiles.length) {
+            isMatch = false;
+        }
 
         // Add new job with current dir
-        if(directory.getName().startsWith(this.fileCorpusPrefix) && isCorpus) {
-//            System.out.println("Adding dir: " + directory.getAbsolutePath());
+        if(directory.getName().startsWith(this.fileCorpusPrefix) && isCorpus && isMatch) {
+            System.out.println("Adding dir: " + directory.getAbsolutePath());
             return;
         }
 
