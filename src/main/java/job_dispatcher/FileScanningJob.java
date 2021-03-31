@@ -1,40 +1,19 @@
 package job_dispatcher;
 
-import java.util.Map;
-import java.util.concurrent.Future;
 
-public class FileScanningJob implements ScanningJob {
+import java.io.File;
+import java.util.List;
 
-    private final String directoryName;
+public class FileScanningJob {
 
-    private final boolean poison;
+    private final List<File> files;
 
-    public FileScanningJob(String directoryName) {
-        this.directoryName = directoryName;
-        this.poison = false;
+    public FileScanningJob(List<File> files) {
+        this.files = files;
     }
 
-    public FileScanningJob() {
-        this.directoryName = "";
-        this.poison = true;
+    public List<File> getFiles() {
+        return this.files;
     }
 
-    @Override
-    public String query() {
-        return null;
-    }
-
-    @Override
-    public Future<Map<String, Integer>> initiate() {
-        return null;
-    }
-
-    @Override
-    public boolean isPoison() {
-        return this.poison;
-    }
-
-    public String getDirectoryName() {
-        return this.directoryName;
-    }
 }

@@ -36,13 +36,13 @@ public class DirectoryCrawler implements Stoppable, Runnable {
         while(this.forever) {
 
             while(!this.directoryNames.isEmpty()) {
-                System.out.println("Start of queue loop");
+
                 // Get directory name
                 CrawlerJob crawlerJob = this.directoryNames.poll();
                 assert crawlerJob != null;
                 String directoryName = crawlerJob.getDirectoryName();
 
-                if(crawlerJob.isPoison()) {
+                if(crawlerJob.isPoisonous()) {
                     break;
                 }
 
@@ -53,7 +53,6 @@ public class DirectoryCrawler implements Stoppable, Runnable {
 
                 // Sleep for fixed time
                 try {
-                    System.out.println("Directory crawler asleep for " + this.dirCrawlerSleepTime);
                     synchronized (this) {
                         wait(this.dirCrawlerSleepTime);
                     }
@@ -112,8 +111,8 @@ public class DirectoryCrawler implements Stoppable, Runnable {
 
         // Add new job with current dir
         if(directory.getName().startsWith(this.fileCorpusPrefix) && isCorpus && isMatch) {
-            FileScanningJob fileScanningJob = new FileScanningJob(directoryName);
-            this.scanningJobs.add(fileScanningJob);
+            ScanningJob scanningJob = new ScanningJob(directoryName);
+            this.scanningJobs.add(scanningJob);
 
 //            System.out.println("Adding dir: " + directory.getAbsolutePath());
             return;

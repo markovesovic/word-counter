@@ -1,6 +1,8 @@
 package directory_crawler;
 
-public class CrawlerJob {
+import main.Poisonable;
+
+public class CrawlerJob implements Poisonable {
 
     private final String directoryName;
     private final boolean poison;
@@ -21,7 +23,8 @@ public class CrawlerJob {
         return directoryName;
     }
 
-    public boolean isPoison() {
+    @Override
+    public boolean isPoisonous() {
         return poison;
     }
 }

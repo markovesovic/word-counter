@@ -12,11 +12,16 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Properties;
-import java.util.Scanner;
+import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class Main {
+
+    private static final int MB_SIZE = 1048576;
+    private static final String[] TEST_COMMAND = {"ad example/data/corpus_sagan"};
 
     private static final String PROPERTIES_FILENAME = "src/main/resources/app.properties";
     private static final Properties properties = new Properties();
@@ -26,6 +31,9 @@ public class Main {
 
     private static DirectoryCrawler directoryCrawler;
     private static JobDispatcher jobDispatcher;
+
+    private static final ExecutorService fileScanningThreadPool = Executors.newCachedThreadPool();
+    private static final ExecutorCompletionService<Map<String, Integer>> completionService = new ExecutorCompletionService<>(fileScanningThreadPool);
 
     public static void main(String[] args) {
         loadProperties();
@@ -42,9 +50,14 @@ public class Main {
         directoryCrawlerThread.start();
 
         // Job dispatcher
-        jobDispatcher = new JobDispatcher(scanningJobs);
+        int fileScanningSizeLimit = Integer.parseInt(String.valueOf(properties.get("file_scanning_size_limit")));
+        List<String> keywords = parseKeywords();
+        jobDispatcher = new JobDispatcher(scanningJobs, completionService, fileScanningSizeLimit, keywords);
         Thread jobDispatcherThread = new Thread(jobDispatcher, "jobDispatcher");
         jobDispatcherThread.start();
+
+        // FileScanner ThreadPool
+
 
     }
 
@@ -57,6 +70,7 @@ public class Main {
 
             if(line.equals("stop")) {
                 System.out.println("Exiting. . .");
+                fileScanningThreadPool.shutdown();
                 directoryCrawler.stop();
                 jobDispatcher.stop();
                 break;
@@ -120,6 +134,10 @@ public class Main {
                 System.out.println("Trazimo rez za web");
             }
 
+            if(command.equals("get")) {
+                System.out.println("get");
+            }
+
         }
         sc.close();
     }
@@ -131,7 +149,9 @@ public class Main {
             properties.load(fr);
 
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println("Could not read properties file !!");
+            System.err.println("Exiting. . .");
+            System.exit(-1);
         } finally {
             try {
                 if(fr != null) {
@@ -141,6 +161,16 @@ public class Main {
                 e.printStackTrace();
             }
         }
+    }
+
+    private static List<String> parseKeywords() {
+        String keywords_raw = String.valueOf(properties.get("keywords"));
+        if(!keywords_raw.contains(",")) {
+            System.err.println("Failed to parse keywords !!");
+            System.err.println("Exiting. . .");
+            System.exit(-1);
+        }
+        return new ArrayList<>(Arrays.asList(keywords_raw.split(",")));
     }
 
 }
