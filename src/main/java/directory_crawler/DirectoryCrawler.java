@@ -61,6 +61,7 @@ public class DirectoryCrawler implements Stoppable, Runnable {
                 }
             }
         }
+        System.out.println("Directory crawler shutting down");
     }
 
     private void searchDir(String directoryName) {

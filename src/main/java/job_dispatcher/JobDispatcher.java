@@ -1,33 +1,24 @@
 package job_dispatcher;
 
 import main.Stoppable;
-import scanner.file.FileScanningWorker;
 
-import java.io.File;
-import java.nio.file.Files;
-import java.util.*;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorCompletionService;
-import java.util.concurrent.ExecutorService;
 
 public class JobDispatcher implements Runnable, Stoppable {
 
     private final ConcurrentLinkedQueue<ScanningJob> scanningJobs;
-    private final ExecutorCompletionService<Map<String, Integer>> completionService;
-    private final int fileScanningJobLimit;
-    private final List<String> keywords;
+    private final BlockingQueue<ScanningJob> fileScanningJobs;
+    private final BlockingQueue<ScanningJob> webScanningJobs;
 
     private volatile boolean forever = true;
 
     public JobDispatcher(ConcurrentLinkedQueue<ScanningJob> scanningJobs,
-                         ExecutorCompletionService<Map<String, Integer>> completionService,
-                         int fileScanningSizeLimit,
-                         List<String> keywords) {
+                         BlockingQueue<ScanningJob> fileScanningJobs,
+                         BlockingQueue<ScanningJob> webScanningJobs) {
         this.scanningJobs = scanningJobs;
-        this.completionService = completionService;
-        this.fileScanningJobLimit = fileScanningSizeLimit;
-        this.keywords = keywords;
+        this.fileScanningJobs = fileScanningJobs;
+        this.webScanningJobs = webScanningJobs;
     }
 
     @Override
@@ -37,58 +28,28 @@ public class JobDispatcher implements Runnable, Stoppable {
             while(!this.scanningJobs.isEmpty()) {
                 ScanningJob scanningJob = this.scanningJobs.poll();
 
+                // Break loop and then finish
                 if(scanningJob.isPoisonous()) {
                     break;
                 }
+
+                // Delegate file scanning job
                 if(scanningJob.getType() == ScanningJobType.FILE_SCANNING_JOB) {
-                    System.out.println("Scanning job received: " + scanningJob.getPath());
+                    System.out.println("File scanning job received: " + scanningJob.getPath());
 
-                    String directoryName = scanningJob.getPath();
-
-                    // Divide work between file scanning workers
-                    List<FileScanningJob> jobs = new ArrayList<>();
-                    List<File> files = new ArrayList<>();
-                    int currentSize = 0;
-
-                    File[] childrenFiles = new File(directoryName).listFiles();
-                    assert childrenFiles != null;
-
-                    for(File f : childrenFiles) {
-                        if(currentSize < this.fileScanningJobLimit) {
-                            files.add(f);
-                            currentSize += f.length();
-                            continue;
-                        }
-                        System.out.println("One job: " + files);
-                        jobs.add(new FileScanningJob(new ArrayList<>(files)));
-                        files.clear();
-                        files.add(f);
-                        currentSize = (int) f.length();
-                    }
-                    jobs.add(new FileScanningJob(new ArrayList<>(files)));
-
-                    // Starting jobs in completionService
-                    for(FileScanningJob job : jobs) {
-                        this.completionService.submit(new FileScanningWorker(job, keywords));
-                    }
-
-                    // Waiting and reducing results for given corpus
-                    Map<String, Integer> occurrences = new HashMap<>();
-                    for(int i = 0; i < jobs.size(); i++) {
-                        try {
-                            Map<String, Integer> localOccurrences = this.completionService.take().get();
-                            localOccurrences.forEach((key, value) -> occurrences.merge(key, value, Integer::sum));
-                        } catch (InterruptedException | ExecutionException e) {
-                            e.printStackTrace();
-                        }
-                    }
+                    this.fileScanningJobs.add(scanningJob);
 
                 }
+
+                // Delegate web scanning job
                 if(scanningJob.getType() == ScanningJobType.WEB_SCANNING_JOB) {
-                    System.out.println("Web scanning job");
+                    System.out.println("Web scanning job received: " + scanningJob.getPath());
+
+                    this.webScanningJobs.add(scanningJob);
                 }
             }
 
+            // Sleep
             try {
                 synchronized (this) {
                     wait(1000);
@@ -97,6 +58,7 @@ public class JobDispatcher implements Runnable, Stoppable {
                 e.printStackTrace();
             }
         }
+        System.out.println("Job dispatcher shutting down");
     }
 
     @Override

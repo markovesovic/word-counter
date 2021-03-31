@@ -4,7 +4,11 @@ package main;
 import directory_crawler.CrawlerJob;
 import directory_crawler.DirectoryCrawler;
 import job_dispatcher.JobDispatcher;
+import job_dispatcher.ResultJob;
 import job_dispatcher.ScanningJob;
+import job_dispatcher.ScanningJobType;
+import result_retriever.ResultRetriever;
+import scanner.file.FileScanner;
 
 import java.io.*;
 import java.net.MalformedURLException;
@@ -13,10 +17,7 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ExecutorCompletionService;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
 
 public class Main {
 
@@ -28,12 +29,20 @@ public class Main {
 
     private static final ConcurrentLinkedQueue<CrawlerJob> directoryNames = new ConcurrentLinkedQueue<>();
     private static final ConcurrentLinkedQueue<ScanningJob> scanningJobs = new ConcurrentLinkedQueue<>();
+    private static final BlockingQueue<ScanningJob> fileScanningJobs = new LinkedBlockingQueue<>();
+    private static final BlockingQueue<ScanningJob> webScanningJobs = new LinkedBlockingQueue<>();
+    private static final ConcurrentLinkedQueue<ResultJob> resultJobs = new ConcurrentLinkedQueue<>();
 
     private static DirectoryCrawler directoryCrawler;
     private static JobDispatcher jobDispatcher;
+    private static FileScanner fileScanner;
+    private static ResultRetriever resultRetriever;
 
     private static final ExecutorService fileScanningThreadPool = Executors.newCachedThreadPool();
-    private static final ExecutorCompletionService<Map<String, Integer>> completionService = new ExecutorCompletionService<>(fileScanningThreadPool);
+    private static final ExecutorCompletionService<Map<String, Integer>> fileScanningCompletionService = new ExecutorCompletionService<>(fileScanningThreadPool);
+
+    private static final ExecutorService resultRetrieverThreadPool = Executors.newCachedThreadPool();
+    private static final ExecutorCompletionService<Map<String, Integer>> resultRetrieverCompletionService = new ExecutorCompletionService<>(resultRetrieverThreadPool);
 
     public static void main(String[] args) {
         loadProperties();
@@ -50,14 +59,22 @@ public class Main {
         directoryCrawlerThread.start();
 
         // Job dispatcher
-        int fileScanningSizeLimit = Integer.parseInt(String.valueOf(properties.get("file_scanning_size_limit")));
-        List<String> keywords = parseKeywords();
-        jobDispatcher = new JobDispatcher(scanningJobs, completionService, fileScanningSizeLimit, keywords);
+        jobDispatcher = new JobDispatcher(scanningJobs, fileScanningJobs, webScanningJobs);
         Thread jobDispatcherThread = new Thread(jobDispatcher, "jobDispatcher");
         jobDispatcherThread.start();
 
         // FileScanner ThreadPool
+        int fileScanningSizeLimit = Integer.parseInt(String.valueOf(properties.get("file_scanning_size_limit")));
+        List<String> keywords = parseKeywords();
+        fileScanner = new FileScanner(fileScanningJobs, resultJobs, fileScanningThreadPool, fileScanningCompletionService, fileScanningSizeLimit, keywords);
+        Thread fileScannerThread = new Thread(fileScanner, "fileScanner");
+        fileScannerThread.start();
 
+        // Result retriever
+        int urlRefreshTime = Integer.parseInt(String.valueOf(properties.get("url_refresh_time")));
+        resultRetriever = new ResultRetriever(resultJobs, resultRetrieverThreadPool, resultRetrieverCompletionService, urlRefreshTime);
+        Thread resultRetrieverThread = new Thread(resultRetriever, "resultRetriever");
+        resultRetrieverThread.start();
 
     }
 
@@ -69,10 +86,11 @@ public class Main {
 
 
             if(line.equals("stop")) {
-                System.out.println("Exiting. . .");
-                fileScanningThreadPool.shutdown();
+                System.out.println("Exiting gracefully. . .");
                 directoryCrawler.stop();
                 jobDispatcher.stop();
+                fileScanner.stop();
+                resultRetriever.stop();
                 break;
             }
 
@@ -122,14 +140,18 @@ public class Main {
             }
 
             if(command.equals("query")) {
-                if(!param.startsWith("file|") || !param.startsWith("web|")) {
-                    System.out.println("Los format argumenta");
-                    break;
-                }
+//                if(!param.startsWith("file|") || !param.startsWith("web|")) {
+//                    System.out.println("Los format argumenta");
+//                    break;
+//                }
                 String corpusName = param.split("\\|")[1];
                 if(param.startsWith("file|")) {
-                    System.out.println("Trazimo rez za file");
-                    break;
+                    List<Map<String, Integer>> result = resultRetriever.getResult(corpusName, ScanningJobType.FILE_SCANNING_JOB, false);
+                    for(Map<String, Integer> map : result) {
+                        System.out.println(map);
+                    }
+
+                    continue;
                 }
                 System.out.println("Trazimo rez za web");
             }
@@ -140,6 +162,8 @@ public class Main {
 
         }
         sc.close();
+
+        System.out.println("Main shutting down");
     }
 
     private static void loadProperties() {
@@ -171,6 +195,29 @@ public class Main {
             System.exit(-1);
         }
         return new ArrayList<>(Arrays.asList(keywords_raw.split(",")));
+    }
+
+    private static void printActiveThreads() {
+        int noThreads = 2;
+        while(noThreads > 1) {
+            System.out.println();
+            System.out.println();
+
+            ThreadGroup currentGroup = Thread.currentThread().getThreadGroup();
+            noThreads = currentGroup.activeCount();
+            Thread[] lstThreads = new Thread[noThreads];
+            currentGroup.enumerate(lstThreads);
+            for (int i = 0; i < noThreads; i++)
+                System.out.println("Thread No:" + i + " = " + lstThreads[i].getName());
+
+            System.out.println();
+            System.out.println();
+            try {
+                Thread.sleep(3000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
 }

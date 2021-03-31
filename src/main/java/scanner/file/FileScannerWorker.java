@@ -13,12 +13,12 @@ import java.util.concurrent.Callable;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class FileScanningWorker implements Callable<Map<String, Integer>> {
+public class FileScannerWorker implements Callable<Map<String, Integer>> {
 
     private final FileScanningJob fileScanningJob;
     private final List<String> keywords;
 
-    public FileScanningWorker(FileScanningJob fileScanningJob, List<String> keywords) {
+    public FileScannerWorker(FileScanningJob fileScanningJob, List<String> keywords) {
         this.fileScanningJob = fileScanningJob;
         this.keywords = keywords;
     }
