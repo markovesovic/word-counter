@@ -28,7 +28,7 @@ public class JobDispatcher implements Runnable, Stoppable {
             while(!this.scanningJobs.isEmpty()) {
                 ScanningJob scanningJob = this.scanningJobs.poll();
 
-                System.out.println("Job dispatcher - Scanning job received " + scanningJob.getPath());
+//                System.out.println("Job dispatcher - Scanning job received " + scanningJob.getPath());
 
                 // Break loop and then finish
                 if(scanningJob.isPoisonous()) {
@@ -37,7 +37,7 @@ public class JobDispatcher implements Runnable, Stoppable {
 
                 // Delegate file scanning job
                 if(scanningJob.getType() == ScanningJobType.FILE_SCANNING_JOB) {
-                    System.out.println("File scanning job received: " + scanningJob.getPath());
+//                    System.out.println("File scanning job received: " + scanningJob.getPath());
 
                     this.fileScanningJobs.add(scanningJob);
 
@@ -45,7 +45,7 @@ public class JobDispatcher implements Runnable, Stoppable {
 
                 // Delegate web scanning job
                 if(scanningJob.getType() == ScanningJobType.WEB_SCANNING_JOB) {
-                    System.out.println("Web scanning job received: " + scanningJob.getPath());
+//                    System.out.println("Web scanning job received: " + scanningJob.getPath());
 
                     this.webScanningJobs.add(scanningJob);
                 }

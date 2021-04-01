@@ -12,7 +12,7 @@ repositories {
 dependencies {
     // Jsoup for parsing html documents
     implementation 'org.jsoup:jsoup:1.13.1'
-
+    implementation 'commons-validator:commons-validator:1.7'
     // testImplementation 'org.junit.jupiter:junit-jupiter-api:5.6.0'
     // testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
 }

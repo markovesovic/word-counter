@@ -3,10 +3,8 @@ package main;
 
 import directory_crawler.CrawlerJob;
 import directory_crawler.DirectoryCrawler;
-import job_dispatcher.JobDispatcher;
-import job_dispatcher.ResultJob;
-import job_dispatcher.ScanningJob;
-import job_dispatcher.ScanningJobType;
+import job_dispatcher.*;
+import org.apache.commons.validator.routines.UrlValidator;
 import result_retriever.ResultRetriever;
 import scanner.file.FileScanner;
 
@@ -26,6 +24,7 @@ public class Main {
 
     private static final String PROPERTIES_FILENAME = "src/main/resources/app.properties";
     private static final Properties properties = new Properties();
+    private static final Map<String, Object> watchedDirectories = new ConcurrentHashMap<>();
 
     private static final ConcurrentLinkedQueue<CrawlerJob> directoryNames = new ConcurrentLinkedQueue<>();
     private static final ConcurrentLinkedQueue<ScanningJob> scanningJobs = new ConcurrentLinkedQueue<>();
@@ -54,7 +53,7 @@ public class Main {
         // Directory crawler
         String fileCorpusPrefix = (String) properties.get("file_corpus_prefix");
         int dirCrawlerSleepTime = Integer.parseInt(String.valueOf(properties.get("dir_crawler_sleep_time")));
-        directoryCrawler = new DirectoryCrawler(directoryNames, scanningJobs, fileCorpusPrefix, dirCrawlerSleepTime);
+        directoryCrawler = new DirectoryCrawler(directoryNames, scanningJobs, watchedDirectories, fileCorpusPrefix, dirCrawlerSleepTime);
         Thread directoryCrawlerThread = new Thread(directoryCrawler, "directoryCrawler");
         directoryCrawlerThread.start();
 
@@ -72,7 +71,7 @@ public class Main {
 
         // Result retriever
         int urlRefreshTime = Integer.parseInt(String.valueOf(properties.get("url_refresh_time")));
-        resultRetriever = new ResultRetriever(resultJobs, resultRetrieverThreadPool, resultRetrieverCompletionService, urlRefreshTime);
+        resultRetriever = new ResultRetriever(resultJobs, resultRetrieverThreadPool, resultRetrieverCompletionService, watchedDirectories, urlRefreshTime);
         Thread resultRetrieverThread = new Thread(resultRetriever, "resultRetriever");
         resultRetrieverThread.start();
 
@@ -104,13 +103,18 @@ public class Main {
                 continue;
             }
 
+            if(!line.contains("query") && !line.contains("ad") && !line.contains("aw") && !line.contains("get")) {
+                System.out.println("Wrong command");
+                continue;
+            }
+
             if(!line.contains(" ")) {
-                System.out.println("Niste uneli dobru komandu");
+                System.out.println("No argument provided");
                 continue;
             }
 
             if(line.split(" ").length > 2) {
-                System.out.println("Uneli ste previse argumenata");
+                System.out.println("Only one argument required");
                 continue;
             }
 
@@ -129,35 +133,48 @@ public class Main {
             }
 
             if(command.equals("aw")) {
-                String websiteName = param;
-                try {
-                    new URL(websiteName).toURI();
-                } catch (URISyntaxException | MalformedURLException e) {
-                    System.out.println("Los format urla");
+                UrlValidator urlValidator = new UrlValidator(new String[]{"http", "https"});
+                if(!urlValidator.isValid(param)) {
+                    System.out.println("Bad url format");
                     continue;
                 }
-                System.out.println("Dodajemo url");
+                continue;
             }
 
-            if(command.equals("query")) {
-//                if(!param.startsWith("file|") || !param.startsWith("web|")) {
-//                    System.out.println("Los format argumenta");
-//                    break;
-//                }
+            if(command.equals("get")) {
+                if( !param.startsWith("file|") && !param.startsWith("web|")) {
+                    System.out.println("Supported formats: file|/corpus_name/, file|summary, web|/corpus_name/, web|summary");
+                    continue;
+                }
+
+                // Finding summary
+                if(param.endsWith("|summary")) {
+                    ScanningJobType type = (param.startsWith("file|")) ? ScanningJobType.FILE_SCANNING_JOB : ScanningJobType.WEB_SCANNING_JOB;
+                    Map<String, Map<String, Integer>> result = resultRetriever.getResultSummary(type);
+                    result.forEach((key, value) -> System.out.println(key + ": " + value));
+                    continue;
+                }
+
+                // Finding for corpus
                 String corpusName = param.split("\\|")[1];
                 if(param.startsWith("file|")) {
-                    corpusName = "src\\main\\resources\\" + corpusName;
-                    System.out.println("Corpus name: " + corpusName);
+                    corpusName = "src/main/resources/" + corpusName;
                     Map<String, Integer> result = resultRetriever.getResult(corpusName, ScanningJobType.FILE_SCANNING_JOB);
-                    System.out.println(result);
-
+                    if(result != null) {
+                        System.out.println(result);
+                    }
                     continue;
                 }
                 System.out.println("Trazimo rez za web");
             }
 
-            if(command.equals("get")) {
-                System.out.println("get");
+            if(command.equals("query")) {
+                if( !param.startsWith("file|") && !param.startsWith("web|")) {
+                    System.out.println("Supported formats: file|corpus_name, web|corpus_name");
+                    continue;
+                }
+
+                System.out.println("query");
             }
 
         }

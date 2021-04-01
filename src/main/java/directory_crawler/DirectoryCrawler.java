@@ -8,24 +8,28 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class DirectoryCrawler implements Stoppable, Runnable {
 
-    private final HashMap<String, Long> lastModifiedValueForFiles = new HashMap<>();
-    private boolean forever = true;
-
     private final ConcurrentLinkedQueue<CrawlerJob> directoryNames;
     private final ConcurrentLinkedQueue<ScanningJob> scanningJobs;
+    private final Map<String, Object> watchedDirectories;
     private final String fileCorpusPrefix;
     private final int dirCrawlerSleepTime;
 
+    private final HashMap<String, Long> lastModifiedValueForFiles = new HashMap<>();
+    private boolean forever = true;
+
     public DirectoryCrawler(ConcurrentLinkedQueue<CrawlerJob> directoryNames,
                             ConcurrentLinkedQueue<ScanningJob> scanningJobs,
-                            String fileCorpusPrefix,
+                            Map<String, Object> watchedDirectories, String fileCorpusPrefix,
                             int dirCrawlerSleepTime) {
         this.directoryNames = directoryNames;
         this.scanningJobs = scanningJobs;
+        this.watchedDirectories = watchedDirectories;
         this.fileCorpusPrefix = fileCorpusPrefix;
         this.dirCrawlerSleepTime = dirCrawlerSleepTime;
     }
@@ -114,7 +118,7 @@ public class DirectoryCrawler implements Stoppable, Runnable {
         if(directory.getName().startsWith(this.fileCorpusPrefix) && isCorpus && isMatch) {
             ScanningJob scanningJob = new ScanningJob(directoryName);
             this.scanningJobs.add(scanningJob);
-
+            this.watchedDirectories.put(directoryName, new Object());
             return;
         }
 

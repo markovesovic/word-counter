@@ -46,7 +46,7 @@ public class FileScanner implements Runnable, Stoppable {
             while(!this.fileScanningJobs.isEmpty()) {
                 ScanningJob scanningJob = this.fileScanningJobs.poll();
 
-                System.out.println("File scanner - file scanning job received " + scanningJob.getPath());
+//                System.out.println("File scanner - file scanning job received " + scanningJob.getPath());
 
                 if(scanningJob.isPoisonous()) {
 //                    this.threadPool.shutdown();
@@ -80,25 +80,6 @@ public class FileScanner implements Runnable, Stoppable {
                 ResultJob resultJob = new ResultJob(ScanningJobType.FILE_SCANNING_JOB, directoryName, occurrences);
                 this.resultJobs.add(resultJob);
 
-
-                // Waiting and reducing results for given corpus
-
-                // Blocking call
-                /*
-                Map<String, Integer> occurrences = new HashMap<>();
-                for(int i = 0; i < jobs.size(); i++) {
-                    try {
-                        Map<String, Integer> localOccurrences = this.completionService.take().get();
-                        localOccurrences.forEach((key, value) -> occurrences.merge(key, value, Integer::sum));
-                    } catch (InterruptedException | ExecutionException e) {
-                        e.printStackTrace();
-                    }
-                }
-                Map<String, Map<String, Integer>> resultMap = new HashMap<>();
-                resultMap.put(directoryName, occurrences);
-                ResultJob resultJob = new ResultJob(ScanningJobType.FILE_SCANNING_JOB, resultMap);
-                this.resultJobs.add(resultJob);
-                */
             }
         }
         System.out.println("File scanner shutting down");
