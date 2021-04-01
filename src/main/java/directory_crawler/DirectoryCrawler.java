@@ -1,6 +1,5 @@
 package directory_crawler;
 
-import job_dispatcher.FileScanningJob;
 import job_dispatcher.ScanningJob;
 import main.Stoppable;
 
@@ -41,6 +40,8 @@ public class DirectoryCrawler implements Stoppable, Runnable {
                 CrawlerJob crawlerJob = this.directoryNames.poll();
                 assert crawlerJob != null;
                 String directoryName = crawlerJob.getDirectoryName();
+
+//                System.out.println("Directory crawler - Crawling job received: " + directoryName);
 
                 if(crawlerJob.isPoisonous()) {
                     break;
@@ -101,7 +102,6 @@ public class DirectoryCrawler implements Stoppable, Runnable {
                     countOfSameFiles++;
                 }
 
-//                System.out.println(f.getAbsolutePath() + "   new: " + newLastModifiedTime + ", old: " + oldLastModifiedTime);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -115,7 +115,6 @@ public class DirectoryCrawler implements Stoppable, Runnable {
             ScanningJob scanningJob = new ScanningJob(directoryName);
             this.scanningJobs.add(scanningJob);
 
-//            System.out.println("Adding dir: " + directory.getAbsolutePath());
             return;
         }
 

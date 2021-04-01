@@ -146,10 +146,10 @@ public class Main {
 //                }
                 String corpusName = param.split("\\|")[1];
                 if(param.startsWith("file|")) {
-                    List<Map<String, Integer>> result = resultRetriever.getResult(corpusName, ScanningJobType.FILE_SCANNING_JOB, false);
-                    for(Map<String, Integer> map : result) {
-                        System.out.println(map);
-                    }
+                    corpusName = "src\\main\\resources\\" + corpusName;
+                    System.out.println("Corpus name: " + corpusName);
+                    Map<String, Integer> result = resultRetriever.getResult(corpusName, ScanningJobType.FILE_SCANNING_JOB);
+                    System.out.println(result);
 
                     continue;
                 }

@@ -2,22 +2,32 @@ package job_dispatcher;
 
 import main.Poisonable;
 
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 
 public class ResultJob implements Poisonable {
 
     private final ScanningJobType type;
-    private final Map<String, Map<String, Integer>> result;
+    private final List<Future<Map<String, Integer>>> futureResult;
+    private Map<String, Integer> calculatedResult;
+    private final String corpusName;
     private final boolean poison;
 
-    public ResultJob(ScanningJobType type, Map<String, Map<String, Integer>> result) {
+    public ResultJob(ScanningJobType type, String corpusName, List<Future<Map<String, Integer>>> futureResult) {
         this.type = type;
-        this.result = result;
+        this.futureResult = futureResult;
+        this.calculatedResult = new HashMap<>();
+        this.corpusName = corpusName;
         this.poison = false;
     }
     public ResultJob() {
         this.type = null;
-        this.result = null;
+        this.futureResult = null;
+        this.calculatedResult = null;
+        this.corpusName = null;
         this.poison = true;
     }
 
@@ -25,8 +35,28 @@ public class ResultJob implements Poisonable {
         return type;
     }
 
-    public Map<String, Map<String, Integer>> getResult() {
-        return result;
+    public Map<String, Integer> getResult() {
+        if(!calculatedResult.isEmpty()) {
+            return this.calculatedResult;
+        }
+
+        assert this.futureResult != null;
+        for(Future<Map<String, Integer>> future : this.futureResult) {
+
+            try {
+                Map<String, Integer> localOccurrences = future.get();
+                localOccurrences.forEach((key, value) -> this.calculatedResult.merge(key, value, Integer::sum));
+
+            } catch (InterruptedException | ExecutionException e) {
+                e.printStackTrace();
+            }
+        }
+
+        return this.calculatedResult;
+    }
+
+    public String getCorpusName() {
+        return this.corpusName;
     }
 
     @Override

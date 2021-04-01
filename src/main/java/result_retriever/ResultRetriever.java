@@ -6,12 +6,9 @@ import main.Stoppable;
 
 import java.util.HashMap;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 public class ResultRetriever implements Runnable, Stoppable {
 
@@ -21,7 +18,7 @@ public class ResultRetriever implements Runnable, Stoppable {
     private final int urlRefreshTime;
 
     private volatile boolean forever = true;
-    private final Map<String, Map<String, Integer>> occurrences;
+    private final Map<String, Map<String, Integer>> cookedOccurrences;
 
     public ResultRetriever(ConcurrentLinkedQueue<ResultJob> resultJobs,
                            ExecutorService threadPool,
@@ -32,7 +29,7 @@ public class ResultRetriever implements Runnable, Stoppable {
         this.completionService = completionService;
         this.urlRefreshTime = urlRefreshTime;
 
-        this.occurrences = new ConcurrentHashMap<>();
+        this.cookedOccurrences = new HashMap<>();
     }
 
     @Override
@@ -43,43 +40,62 @@ public class ResultRetriever implements Runnable, Stoppable {
 
                 ResultJob resultJob = this.resultJobs.poll();
 
-//                System.out.println(resultJob.getResult());
-                if(resultJob.isPoisonous()) {
-                    System.out.println("Result retriever waiting for threadpool");
-                    this.threadPool.shutdown();
-                    while(!this.threadPool.isShutdown()) {
+                System.out.println("Result retriever - result job received: " + resultJob.getCorpusName());
 
-                    }
+                if(resultJob.isPoisonous()) {
+//                    System.out.println("Result retriever waiting for thread pool");
+//                    this.threadPool.shutdown();
+//                    while(!this.threadPool.isShutdown()) {
+//
+//                    }
                     break;
                 }
 
+//                System.out.println("Before getResult(): " + this.cookedOccurrences);
+
                 if(resultJob.getType() == ScanningJobType.FILE_SCANNING_JOB) {
-                    resultJob.getResult().forEach(this.occurrences::put);
+//                    resultJob.getResult().forEach(this.occurrences::put);
+                    this.cookedOccurrences.put(resultJob.getCorpusName(), resultJob.getResult());
                 }
+
+//                System.out.println("After getResult(): " + this.cookedOccurrences);
 
             }
         }
         System.out.println("Result retriever shutting down");
     }
 
-    public List<Map<String, Integer>> getResult(String corpusName, ScanningJobType corpusType, boolean summary) {
-        List<Map<String, Integer>> returnResult = new ArrayList<>();
-
-        if(summary) {
-            return null;
+    public Map<String, Integer> getResult(String corpusName, ScanningJobType corpusType) {
+        for(String s: this.cookedOccurrences.keySet()) {
+            System.out.println();
+            System.out.println(s);
+            System.out.println();
         }
-
-        System.out.println("Corpus name: " + corpusName);
-        for(Map.Entry<String, Map<String, Integer>> entry : this.occurrences.entrySet()) {
-            System.out.println(entry.getKey());
-            System.out.println(entry.getKey().endsWith(corpusName));
-            if(entry.getKey().endsWith(corpusName)) {
-                returnResult.add(new HashMap<>(this.occurrences.get(entry.getKey())));
-            }
-        }
-
-        return returnResult;
+        return this.cookedOccurrences.get(corpusName);
     }
+
+    public List<Map<String, Integer>> queryResult(String corpusName, ScanningJobType corpusType, boolean summary) {
+        return null;
+    }
+
+//    public List<Map<String, Integer>> getResult(String corpusName, ScanningJobType corpusType, boolean summary) {
+//        List<Map<String, Integer>> returnResult = new ArrayList<>();
+//
+//        if(summary) {
+//            return null;
+//        }
+//
+//        System.out.println("Corpus name: " + corpusName);
+//        for(Map.Entry<String, Map<String, Integer>> entry : this.occurrences.entrySet()) {
+//            System.out.println(entry.getKey());
+//            System.out.println(entry.getKey().endsWith(corpusName));
+//            if(entry.getKey().endsWith(corpusName)) {
+//                returnResult.add(new HashMap<>(this.occurrences.get(entry.getKey())));
+//            }
+//        }
+//
+//        return returnResult;
+//    }
 
     @Override
     public synchronized void stop() {

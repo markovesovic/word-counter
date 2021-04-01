@@ -28,6 +28,8 @@ public class JobDispatcher implements Runnable, Stoppable {
             while(!this.scanningJobs.isEmpty()) {
                 ScanningJob scanningJob = this.scanningJobs.poll();
 
+                System.out.println("Job dispatcher - Scanning job received " + scanningJob.getPath());
+
                 // Break loop and then finish
                 if(scanningJob.isPoisonous()) {
                     break;
@@ -52,7 +54,7 @@ public class JobDispatcher implements Runnable, Stoppable {
             // Sleep
             try {
                 synchronized (this) {
-                    wait(1000);
+                    wait(200);
                 }
             } catch (InterruptedException e) {
                 e.printStackTrace();
