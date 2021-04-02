@@ -1,4 +1,4 @@
-package job_dispatcher;
+package jobs;
 
 import main.Poisonable;
 
@@ -12,7 +12,7 @@ public class ResultJob implements Poisonable {
 
     private final ScanningJobType type;
     private final List<Future<Map<String, Integer>>> futureResult;
-    private Map<String, Integer> calculatedResult;
+    private final Map<String, Integer> calculatedResult;
     private final String corpusName;
     private final boolean poison;
 
@@ -36,6 +36,7 @@ public class ResultJob implements Poisonable {
     }
 
     public Map<String, Integer> getResult() {
+        assert calculatedResult != null;
         if(!calculatedResult.isEmpty()) {
             return this.calculatedResult;
         }

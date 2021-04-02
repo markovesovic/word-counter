@@ -1,4 +1,4 @@
-package directory_crawler;
+package jobs;
 
 import main.Poisonable;
 

@@ -1,14 +1,13 @@
 package scanner.file;
 
-import job_dispatcher.FileScanningJob;
-import job_dispatcher.ResultJob;
-import job_dispatcher.ScanningJob;
-import job_dispatcher.ScanningJobType;
+import jobs.FileScanningJob;
+import jobs.ResultJob;
+import jobs.ScanningJob;
+import jobs.ScanningJobType;
 import main.Stoppable;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
@@ -77,7 +76,9 @@ public class FileScanner implements Runnable, Stoppable {
                         e.printStackTrace();
                     }
                 }
-                ResultJob resultJob = new ResultJob(ScanningJobType.FILE_SCANNING_JOB, directoryName, occurrences);
+                directoryName = directoryName.replace("\\", "/");
+                String corpusName = directoryName.split("/")[directoryName.split("/").length - 1];
+                ResultJob resultJob = new ResultJob(ScanningJobType.FILE_SCANNING_JOB, corpusName, occurrences);
                 this.resultJobs.add(resultJob);
 
             }
@@ -109,7 +110,7 @@ public class FileScanner implements Runnable, Stoppable {
     }
 
     @Override
-    public synchronized void stop() {
+    public void stop() {
         this.forever = false;
         this.threadPool.shutdown();
         this.fileScanningJobs.add(new ScanningJob());

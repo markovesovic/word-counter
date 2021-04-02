@@ -1,6 +1,7 @@
 package directory_crawler;
 
-import job_dispatcher.ScanningJob;
+import jobs.CrawlerJob;
+import jobs.ScanningJob;
 import main.Stoppable;
 
 import java.io.File;
@@ -9,7 +10,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class DirectoryCrawler implements Stoppable, Runnable {
@@ -116,9 +116,13 @@ public class DirectoryCrawler implements Stoppable, Runnable {
 
         // Add new job with current dir
         if(directory.getName().startsWith(this.fileCorpusPrefix) && isCorpus && isMatch) {
+
             ScanningJob scanningJob = new ScanningJob(directoryName);
             this.scanningJobs.add(scanningJob);
-            this.watchedDirectories.put(directoryName, new Object());
+
+            directoryName = directoryName.replace("\\", "/");
+            String corpusName = directoryName.split("/")[directoryName.split("/").length - 1];
+            this.watchedDirectories.put(corpusName, new Object());
             return;
         }
 
@@ -130,7 +134,7 @@ public class DirectoryCrawler implements Stoppable, Runnable {
     }
 
     @Override
-    public synchronized void stop() {
+    public void stop() {
         notifyAll();
         this.forever = false;
         this.directoryNames.add(new CrawlerJob());

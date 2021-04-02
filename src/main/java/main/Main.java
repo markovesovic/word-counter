@@ -1,17 +1,18 @@
 package main;
 
 
-import directory_crawler.CrawlerJob;
+import jobs.CrawlerJob;
 import directory_crawler.DirectoryCrawler;
 import job_dispatcher.*;
+import jobs.ResultJob;
+import jobs.ScanningJob;
+import jobs.ScanningJobType;
 import org.apache.commons.validator.routines.UrlValidator;
 import result_retriever.ResultRetriever;
 import scanner.file.FileScanner;
+import scanner.web.WebScanner;
 
 import java.io.*;
-import java.net.MalformedURLException;
-import java.net.URISyntaxException;
-import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -19,12 +20,13 @@ import java.util.concurrent.*;
 
 public class Main {
 
-    private static final int MB_SIZE = 1048576;
-    private static final String[] TEST_COMMAND = {"ad example/data/corpus_sagan"};
+//    private static final int MB_SIZE = 1048576;
 
     private static final String PROPERTIES_FILENAME = "src/main/resources/app.properties";
     private static final Properties properties = new Properties();
     private static final Map<String, Object> watchedDirectories = new ConcurrentHashMap<>();
+    private static final Map<String, Object> watchedUrls = new ConcurrentHashMap<>();
+    private static int hopCount;
 
     private static final ConcurrentLinkedQueue<CrawlerJob> directoryNames = new ConcurrentLinkedQueue<>();
     private static final ConcurrentLinkedQueue<ScanningJob> scanningJobs = new ConcurrentLinkedQueue<>();
@@ -35,45 +37,82 @@ public class Main {
     private static DirectoryCrawler directoryCrawler;
     private static JobDispatcher jobDispatcher;
     private static FileScanner fileScanner;
+    private static WebScanner webScanner;
     private static ResultRetriever resultRetriever;
 
     private static final ExecutorService fileScanningThreadPool = Executors.newCachedThreadPool();
-    private static final ExecutorCompletionService<Map<String, Integer>> fileScanningCompletionService = new ExecutorCompletionService<>(fileScanningThreadPool);
+    private static final ExecutorCompletionService<Map<String, Integer>>
+                                fileScanningCompletionService = new ExecutorCompletionService<>(fileScanningThreadPool);
+
+    private static final ExecutorService webScanningThreadPool = Executors.newCachedThreadPool();
+    private static final ExecutorCompletionService<Map<String, Integer>>
+                                webScanningCompletionService = new ExecutorCompletionService<>(webScanningThreadPool);
 
     private static final ExecutorService resultRetrieverThreadPool = Executors.newCachedThreadPool();
-    private static final ExecutorCompletionService<Map<String, Integer>> resultRetrieverCompletionService = new ExecutorCompletionService<>(resultRetrieverThreadPool);
+
+    private static final ExecutorCompletionService<Map<String, Integer>>
+                                resultRetrieverCompletionService = new ExecutorCompletionService<>(resultRetrieverThreadPool);
 
     public static void main(String[] args) {
+        DebugStream.activate();
         loadProperties();
         initWorkers();
         forever();
     }
 
     private static void initWorkers() {
+
         // Directory crawler
         String fileCorpusPrefix = (String) properties.get("file_corpus_prefix");
         int dirCrawlerSleepTime = Integer.parseInt(String.valueOf(properties.get("dir_crawler_sleep_time")));
-        directoryCrawler = new DirectoryCrawler(directoryNames, scanningJobs, watchedDirectories, fileCorpusPrefix, dirCrawlerSleepTime);
-        Thread directoryCrawlerThread = new Thread(directoryCrawler, "directoryCrawler");
+        directoryCrawler = new DirectoryCrawler(directoryNames,
+                                                scanningJobs,
+                                                watchedDirectories,
+                                                fileCorpusPrefix,
+                                                dirCrawlerSleepTime);
+        Thread directoryCrawlerThread = new Thread(directoryCrawler, "DirectoryCrawler");
         directoryCrawlerThread.start();
 
         // Job dispatcher
-        jobDispatcher = new JobDispatcher(scanningJobs, fileScanningJobs, webScanningJobs);
-        Thread jobDispatcherThread = new Thread(jobDispatcher, "jobDispatcher");
+        jobDispatcher = new JobDispatcher(scanningJobs,
+                                          fileScanningJobs,
+                                          webScanningJobs);
+        Thread jobDispatcherThread = new Thread(jobDispatcher, "JobDispatcher");
         jobDispatcherThread.start();
 
         // FileScanner ThreadPool
         int fileScanningSizeLimit = Integer.parseInt(String.valueOf(properties.get("file_scanning_size_limit")));
         List<String> keywords = parseKeywords();
-        fileScanner = new FileScanner(fileScanningJobs, resultJobs, fileScanningThreadPool, fileScanningCompletionService, fileScanningSizeLimit, keywords);
-        Thread fileScannerThread = new Thread(fileScanner, "fileScanner");
+        fileScanner = new FileScanner(fileScanningJobs,
+                                      resultJobs,
+                                      fileScanningThreadPool,
+                                      fileScanningCompletionService,
+                                      fileScanningSizeLimit,
+                                      keywords);
+        Thread fileScannerThread = new Thread(fileScanner, "FileScanner");
         fileScannerThread.start();
+
+        // WebScanner ThreadPool
+        webScanner = new WebScanner(webScanningJobs,
+                                    resultJobs,
+                                    webScanningThreadPool,
+                                    webScanningCompletionService,
+                                    watchedUrls,
+                                    keywords);
+        Thread webScannerThread = new Thread(webScanner, "WebScanner");
+        webScannerThread.start();
 
         // Result retriever
         int urlRefreshTime = Integer.parseInt(String.valueOf(properties.get("url_refresh_time")));
-        resultRetriever = new ResultRetriever(resultJobs, resultRetrieverThreadPool, resultRetrieverCompletionService, watchedDirectories, urlRefreshTime);
-        Thread resultRetrieverThread = new Thread(resultRetriever, "resultRetriever");
+        resultRetriever = new ResultRetriever(resultJobs,
+                                              resultRetrieverThreadPool,
+                                              resultRetrieverCompletionService,
+                                              watchedDirectories,
+                                              watchedUrls,
+                                              urlRefreshTime);
+        Thread resultRetrieverThread = new Thread(resultRetriever, "ResultRetriever");
         resultRetrieverThread.start();
+
 
     }
 
@@ -83,12 +122,23 @@ public class Main {
         while(true) {
             String line = sc.nextLine();
 
+            if(line.equals("add")) {
+                ScanningJob scanningJob = new ScanningJob("https://google.com", hopCount);
+                scanningJobs.add(scanningJob);
+                continue;
+            }
+
+            if(line.equals("test")) {
+                resultRetriever.Test();
+                continue;
+            }
 
             if(line.equals("stop")) {
                 System.out.println("Exiting gracefully. . .");
                 directoryCrawler.stop();
                 jobDispatcher.stop();
                 fileScanner.stop();
+                webScanner.stop();
                 resultRetriever.stop();
                 break;
             }
@@ -138,8 +188,12 @@ public class Main {
                     System.out.println("Bad url format");
                     continue;
                 }
+
+                ScanningJob scanningJob = new ScanningJob(param, hopCount);
+                scanningJobs.add(scanningJob);
                 continue;
             }
+
 
             if(command.equals("get")) {
                 if( !param.startsWith("file|") && !param.startsWith("web|")) {
@@ -150,22 +204,25 @@ public class Main {
                 // Finding summary
                 if(param.endsWith("|summary")) {
                     ScanningJobType type = (param.startsWith("file|")) ? ScanningJobType.FILE_SCANNING_JOB : ScanningJobType.WEB_SCANNING_JOB;
-                    Map<String, Map<String, Integer>> result = resultRetriever.getResultSummary(type);
+                    Map<String, Integer> result = resultRetriever.getResultSummary(type);
                     result.forEach((key, value) -> System.out.println(key + ": " + value));
                     continue;
                 }
 
+                String corpusName = "corpus_" + param.split("\\|")[1];
                 // Finding for corpus
-                String corpusName = param.split("\\|")[1];
                 if(param.startsWith("file|")) {
-                    corpusName = "src/main/resources/" + corpusName;
                     Map<String, Integer> result = resultRetriever.getResult(corpusName, ScanningJobType.FILE_SCANNING_JOB);
                     if(result != null) {
                         System.out.println(result);
                     }
                     continue;
                 }
-                System.out.println("Trazimo rez za web");
+
+                // Finding for web
+                if(param.startsWith("web|")) {
+
+                }
             }
 
             if(command.equals("query")) {
@@ -174,8 +231,22 @@ public class Main {
                     continue;
                 }
 
+                String corpusName = "corpus_" + param.split("\\|")[1];
+
+                if(param.startsWith("file|")) {
+                    Map<String, Integer> result = resultRetriever.queryResult(corpusName, ScanningJobType.FILE_SCANNING_JOB);
+                    if(result != null) {
+                        System.out.println(result);
+                    }
+                    continue;
+                }
+                if(param.startsWith("web|")) {
+
+                }
+
                 System.out.println("query");
             }
+
 
         }
         sc.close();
@@ -188,6 +259,7 @@ public class Main {
         try {
             fr = new FileReader(PROPERTIES_FILENAME);
             properties.load(fr);
+            hopCount = Integer.parseInt(String.valueOf(properties.get("hop_count")));
 
         } catch (IOException e) {
             System.err.println("Could not read properties file !!");

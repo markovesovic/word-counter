@@ -1,15 +1,15 @@
 package result_retriever;
 
-import job_dispatcher.ResultJob;
-import job_dispatcher.ScanningJobType;
+import jobs.ResultJob;
+import jobs.ScanningJobType;
 import main.Stoppable;
 import org.apache.commons.validator.routines.UrlValidator;
+import scanner.file.FileScanner;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ExecutorCompletionService;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.*;
+
+import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class ResultRetriever implements Runnable, Stoppable {
 
@@ -17,35 +17,43 @@ public class ResultRetriever implements Runnable, Stoppable {
     private final ExecutorService threadPool;
     private final ExecutorCompletionService<Map<String, Integer>> completionService;
     private final Map<String, Object> watchedDirectories;
+    private final Map<String, Object> watchedUrls;
     private final int urlRefreshTime;
 
     private volatile boolean forever = true;
     private final Map<String, Map<String, Integer>> cookedOccurrences;
+    private final Map<String, Map<String, Integer>> cachedWebOccurrences;
+    private final ScheduledExecutorService cron;
 
     public ResultRetriever(ConcurrentLinkedQueue<ResultJob> resultJobs,
                            ExecutorService threadPool,
                            ExecutorCompletionService<Map<String, Integer>> completionService,
                            Map<String, Object> watchedDirectories,
+                           Map<String, Object> watchedUrls,
                            int urlRefreshTime) {
         this.resultJobs = resultJobs;
         this.threadPool = threadPool;
         this.completionService = completionService;
         this.watchedDirectories = watchedDirectories;
+        this.watchedUrls = watchedUrls;
         this.urlRefreshTime = urlRefreshTime;
 
         this.cookedOccurrences = new ConcurrentHashMap<>();
-        this.cookedOccurrences.put("https://google.com", new HashMap<>());
+        this.cachedWebOccurrences = new ConcurrentHashMap<>();
+        cron = Executors.newScheduledThreadPool(1);
+        startCron();
     }
 
     @Override
     public void run() {
 
         while(this.forever) {
+
             while(!this.resultJobs.isEmpty()) {
 
                 ResultJob resultJob = this.resultJobs.poll();
 
-                System.out.println("Result retriever - result job received: " + resultJob.getCorpusName());
+//                System.out.println("Result retriever - result job received: " + resultJob.getCorpusName());
 
                 if(resultJob.isPoisonous()) {
 //                    System.out.println("Result retriever waiting for thread pool");
@@ -58,50 +66,103 @@ public class ResultRetriever implements Runnable, Stoppable {
 
                 if(resultJob.getType() == ScanningJobType.FILE_SCANNING_JOB) {
                     this.cookedOccurrences.put(resultJob.getCorpusName(), resultJob.getResult());
+                } else if(resultJob.getType() == ScanningJobType.WEB_SCANNING_JOB) {
+                    this.cookedOccurrences.put(resultJob.getCorpusName(), resultJob.getResult());
                 }
             }
         }
         System.out.println("Result retriever shutting down");
     }
 
+
     public Map<String, Integer> getResult(String corpusName, ScanningJobType corpusType) {
 
         if(corpusType == ScanningJobType.FILE_SCANNING_JOB) {
 
             if (!this.watchedDirectories.containsKey(corpusName)) {
-                System.out.println("Trazeni korpus nije dodat za obradu!");
+                System.out.println("Given corpus is never added!");
                 return null;
             }
+
+            while(!this.cookedOccurrences.containsKey(corpusName)) {
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
             return this.cookedOccurrences.get(corpusName);
+        }
+
+        if(corpusType == ScanningJobType.WEB_SCANNING_JOB) {
 
         }
 
         return null;
     }
 
-    public Map<String, Map<String, Integer>> getResultSummary(ScanningJobType corpusType) {
+    public Map<String, Integer> queryResult(String corpusName, ScanningJobType corpusType) {
 
-        final boolean isFileScanningJob = corpusType == ScanningJobType.FILE_SCANNING_JOB;
+        if(corpusType == ScanningJobType.FILE_SCANNING_JOB) {
 
-        Map<String, Map<String, Integer>> result = new HashMap<>();
-
-        this.cookedOccurrences.forEach((key, value) -> {
-            UrlValidator urlValidator = new UrlValidator(new String[]{"http", "https"});
-            if(urlValidator.isValid(key) != isFileScanningJob) {
-                result.put(key, value);
+            if(!this.watchedDirectories.containsKey(corpusName)) {
+                System.out.println("Given corpus is never added!");
+                return null;
             }
-        });
-        return result;
-    }
+            if(this.cookedOccurrences.containsKey(corpusName)) {
+                return this.cookedOccurrences.get(corpusName);
+            }
+            System.out.println("Result is not yet ready");
+            return null;
+        }
 
-    public List<Map<String, Integer>> queryResult(String corpusName, ScanningJobType corpusType, boolean summary) {
         return null;
     }
 
+    public Map<String, Integer> getResultSummary(ScanningJobType corpusType) {
+        Map<String, Integer> result = new HashMap<>();
+
+        if(corpusType == ScanningJobType.FILE_SCANNING_JOB) {
+
+            this.cookedOccurrences.forEach((key, value) -> {
+                UrlValidator urlValidator = new UrlValidator(new String[]{"http", "https"});
+                if (!urlValidator.isValid(key)) {
+                    value.forEach((localKey, localValue) -> result.merge(localKey, localValue, Integer::sum));
+                }
+            });
+
+            return result;
+        } else if(corpusType == ScanningJobType.WEB_SCANNING_JOB) {
+
+        }
+        return null;
+    }
+
+
+    public void Test() {
+        if(this.cookedOccurrences.isEmpty()) {
+            System.out.println("empty");
+            return;
+        }
+        this.cookedOccurrences.forEach((key, value) -> {
+            System.out.println(key + ": " + value);
+        });
+    }
+
+    private void startCron() {
+        final Runnable cronJob = () -> {
+            System.out.println("Beep");
+        };
+        final ScheduledFuture<?> beeperHandle = this.cron.scheduleAtFixedRate(cronJob, 10, 5, SECONDS);
+
+        this.cron.schedule(() -> {beeperHandle.cancel(true);},  60 * 60, SECONDS);
+    }
+
     @Override
-    public synchronized void stop() {
+    public void stop() {
         this.forever = false;
         this.threadPool.shutdown();
+        this.cron.shutdownNow();
         this.resultJobs.add(new ResultJob());
     }
 }

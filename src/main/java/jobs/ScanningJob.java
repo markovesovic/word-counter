@@ -1,4 +1,4 @@
-package job_dispatcher;
+package jobs;
 
 import main.Poisonable;
 
@@ -33,7 +33,7 @@ public class ScanningJob implements Poisonable {
         this.poison = true;
     }
 
-    ScanningJobType getType() {
+    public ScanningJobType getType() {
         return this.type;
     }
 

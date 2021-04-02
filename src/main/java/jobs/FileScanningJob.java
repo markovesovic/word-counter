@@ -1,4 +1,4 @@
-package job_dispatcher;
+package jobs;
 
 
 import java.io.File;

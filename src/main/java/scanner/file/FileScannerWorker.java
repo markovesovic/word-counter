@@ -1,6 +1,6 @@
 package scanner.file;
 
-import job_dispatcher.FileScanningJob;
+import jobs.FileScanningJob;
 
 import java.io.File;
 import java.io.IOException;
@@ -40,8 +40,8 @@ public class FileScannerWorker implements Callable<Map<String, Integer>> {
                 // For each keyword given by main
                 for(String keyword : this.keywords) {
                     // Find number of occurrences
-                    keyword = " " + keyword + " ";
-                    Matcher matcher = Pattern.compile(keyword).matcher(text);
+                    String keywordExtended = " " + keyword + " ";
+                    Matcher matcher = Pattern.compile(keywordExtended).matcher(text);
                     int count = 0;
                     while(matcher.find()) {
                         count++;

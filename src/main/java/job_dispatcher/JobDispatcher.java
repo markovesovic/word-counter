@@ -1,5 +1,7 @@
 package job_dispatcher;
 
+import jobs.ScanningJob;
+import jobs.ScanningJobType;
 import main.Stoppable;
 
 import java.util.concurrent.BlockingQueue;
@@ -64,7 +66,7 @@ public class JobDispatcher implements Runnable, Stoppable {
     }
 
     @Override
-    public synchronized void stop() {
+    public void stop() {
         this.forever = false;
         this.scanningJobs.add(new ScanningJob());
     }

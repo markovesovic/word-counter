@@ -1,4 +1,4 @@
-package job_dispatcher;
+package jobs;
 
 public enum ScanningJobType {
     FILE_SCANNING_JOB,
