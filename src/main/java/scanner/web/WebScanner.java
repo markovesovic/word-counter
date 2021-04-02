@@ -49,11 +49,19 @@ public class WebScanner implements Runnable, Stoppable {
 
                 ScanningJob scanningJob = this.webScanningJobs.poll();
 
+                System.out.println("Job: " + scanningJob.getPath() + ", hopCount: " + scanningJob.getHopCount());
+
                 if(scanningJob.isPoisonous()) {
                     break;
                 }
                 String webUrl = scanningJob.getPath();
                 int hopCount = scanningJob.getHopCount();
+
+                if(this.watchedUrls.containsKey(webUrl)) {
+                    continue;
+                }
+
+                this.watchedUrls.put(webUrl, new Object());
 
                 findOtherUrls(webUrl, hopCount - 1);
 
@@ -74,7 +82,7 @@ public class WebScanner implements Runnable, Stoppable {
     }
 
     private void findOtherUrls(String webUrl, int hopCount) {
-        if(hopCount > 0) {
+        if(hopCount == 0) {
             return;
         }
         try {
@@ -83,14 +91,27 @@ public class WebScanner implements Runnable, Stoppable {
 
             for(Element link : links) {
                 String newLink = link.attr("abs:href");
+                newLink = remoteQuery(newLink);
                 if(!this.watchedUrls.containsKey(newLink)) {
                     this.webScanningJobs.add(new ScanningJob(newLink, hopCount));
-                    this.watchedUrls.put(newLink, new Object());
                 }
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    private String remoteQuery(String theURL) {
+        int endPos;
+        if (theURL.indexOf("?") > 0) {
+            endPos = theURL.indexOf("?");
+        } else if (theURL.indexOf("#") > 0) {
+            endPos = theURL.indexOf("#");
+        } else {
+            endPos = theURL.length();
+        }
+
+        return theURL.substring(0, endPos);
     }
 
     @Override

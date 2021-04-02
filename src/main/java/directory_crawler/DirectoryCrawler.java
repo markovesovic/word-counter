@@ -135,7 +135,6 @@ public class DirectoryCrawler implements Stoppable, Runnable {
 
     @Override
     public void stop() {
-        notifyAll();
         this.forever = false;
         this.directoryNames.add(new CrawlerJob());
     }

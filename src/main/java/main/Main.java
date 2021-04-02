@@ -209,9 +209,10 @@ public class Main {
                     continue;
                 }
 
-                String corpusName = "corpus_" + param.split("\\|")[1];
+                String corpusName = param.split("\\|")[1];
                 // Finding for corpus
                 if(param.startsWith("file|")) {
+                    corpusName = "corpus_" + corpusName;
                     Map<String, Integer> result = resultRetriever.getResult(corpusName, ScanningJobType.FILE_SCANNING_JOB);
                     if(result != null) {
                         System.out.println(result);
@@ -221,7 +222,11 @@ public class Main {
 
                 // Finding for web
                 if(param.startsWith("web|")) {
-
+                    Map<String, Integer> result = resultRetriever.getResult(corpusName, ScanningJobType.WEB_SCANNING_JOB);
+                    if(result != null) {
+                        System.out.println(result);
+                    }
+                    continue;
                 }
             }
 
@@ -231,9 +236,10 @@ public class Main {
                     continue;
                 }
 
-                String corpusName = "corpus_" + param.split("\\|")[1];
+                String corpusName = param.split("\\|")[1];
 
                 if(param.startsWith("file|")) {
+                    corpusName = "corpus_" + corpusName;
                     Map<String, Integer> result = resultRetriever.queryResult(corpusName, ScanningJobType.FILE_SCANNING_JOB);
                     if(result != null) {
                         System.out.println(result);

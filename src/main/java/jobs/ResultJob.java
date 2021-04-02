@@ -36,12 +36,10 @@ public class ResultJob implements Poisonable {
     }
 
     public Map<String, Integer> getResult() {
-        assert calculatedResult != null;
         if(!calculatedResult.isEmpty()) {
             return this.calculatedResult;
         }
 
-        assert this.futureResult != null;
         for(Future<Map<String, Integer>> future : this.futureResult) {
 
             try {
@@ -49,7 +47,7 @@ public class ResultJob implements Poisonable {
                 localOccurrences.forEach((key, value) -> this.calculatedResult.merge(key, value, Integer::sum));
 
             } catch (InterruptedException | ExecutionException e) {
-                e.printStackTrace();
+                System.out.println("Ovde puca");
             }
         }
 

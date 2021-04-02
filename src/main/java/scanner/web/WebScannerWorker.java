@@ -22,12 +22,18 @@ public class WebScannerWorker implements Callable<Map<String, Integer>> {
     }
 
     @Override
-    public Map<String, Integer> call() throws Exception {
+    public Map<String, Integer> call() {
 
         Map<String, Integer> results = new HashMap<>();
         String webUrl = this.webScanningJob.getWebUrl();
-        Document doc = Jsoup.connect(webUrl).get();
+        Document doc = null;
+        try {
+            doc = Jsoup.connect(webUrl).get();
+        } catch(Exception e) {
+            System.out.println("Ovo baca kad jsoup dovata");
+        }
 
+        assert doc != null;
         for(String keyword : this.keywords) {
             String keywordExtended = " " + keyword + " ";
             Matcher matcher = Pattern.compile(keywordExtended).matcher(doc.outerHtml());

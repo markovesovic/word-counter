@@ -53,15 +53,13 @@ public class ResultRetriever implements Runnable, Stoppable {
 
                 ResultJob resultJob = this.resultJobs.poll();
 
-//                System.out.println("Result retriever - result job received: " + resultJob.getCorpusName());
-
                 if(resultJob.isPoisonous()) {
-//                    System.out.println("Result retriever waiting for thread pool");
-//                    this.threadPool.shutdown();
-//                    while(!this.threadPool.isShutdown()) {
-//
-//                    }
                     break;
+                }
+                Map<String, Integer> result = resultJob.getResult();
+                if(result == null) {
+                    System.out.println("Result is null" + "corpus: " + resultJob.getCorpusName());
+                    continue;
                 }
 
                 if(resultJob.getType() == ScanningJobType.FILE_SCANNING_JOB) {
@@ -80,7 +78,7 @@ public class ResultRetriever implements Runnable, Stoppable {
         if(corpusType == ScanningJobType.FILE_SCANNING_JOB) {
 
             if (!this.watchedDirectories.containsKey(corpusName)) {
-                System.out.println("Given corpus is never added!");
+                System.out.println("Given corpus was never added!");
                 return null;
             }
 
@@ -95,6 +93,36 @@ public class ResultRetriever implements Runnable, Stoppable {
         }
 
         if(corpusType == ScanningJobType.WEB_SCANNING_JOB) {
+            boolean exists = false;
+            for(String key : this.watchedUrls.keySet()) {
+                if(key.contains(corpusName)) {
+                    exists = true;
+                }
+            }
+            if(!exists) {
+                System.out.println("Given corpus was never added");
+                return null;
+            }
+
+            if(this.cachedWebOccurrences.containsKey(corpusName)) {
+                System.out.println("Cached data");
+                return this.cachedWebOccurrences.get(corpusName);
+            }
+
+            List<Map<String, Integer>> jobs = new ArrayList<>();
+            this.cookedOccurrences.forEach((key, value) -> {
+                if(key.contains(corpusName)) {
+                    jobs.add(value);
+                }
+            });
+            try {
+                System.out.println("Calculating all results");
+                Map<String, Integer> result = this.completionService.submit(new DomainMergerWorker(jobs)).get();
+                this.cachedWebOccurrences.put(corpusName, result);
+                return result;
+            } catch (InterruptedException | ExecutionException e) {
+                e.printStackTrace();
+            }
 
         }
 
@@ -106,7 +134,7 @@ public class ResultRetriever implements Runnable, Stoppable {
         if(corpusType == ScanningJobType.FILE_SCANNING_JOB) {
 
             if(!this.watchedDirectories.containsKey(corpusName)) {
-                System.out.println("Given corpus is never added!");
+                System.out.println("Given corpus was never added!");
                 return null;
             }
             if(this.cookedOccurrences.containsKey(corpusName)) {
@@ -150,12 +178,10 @@ public class ResultRetriever implements Runnable, Stoppable {
     }
 
     private void startCron() {
-        final Runnable cronJob = () -> {
-            System.out.println("Beep");
-        };
-        final ScheduledFuture<?> beeperHandle = this.cron.scheduleAtFixedRate(cronJob, 10, 5, SECONDS);
 
-        this.cron.schedule(() -> {beeperHandle.cancel(true);},  60 * 60, SECONDS);
+        final Runnable cronJob = this.watchedUrls::clear;
+        final ScheduledFuture<?> cronHandle = this.cron.scheduleAtFixedRate(cronJob, 0, this.urlRefreshTime, SECONDS);
+
     }
 
     @Override
