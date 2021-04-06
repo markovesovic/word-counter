@@ -1,6 +1,5 @@
 package scanner.web;
 
-import jobs.WebScanningJob;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 
@@ -13,11 +12,11 @@ import java.util.regex.Pattern;
 
 public class WebScannerWorker implements Callable<Map<String, Integer>> {
 
-    private final WebScanningJob webScanningJob;
+    private final String webUrl;
     private final List<String> keywords;
 
-    public WebScannerWorker(WebScanningJob webScanningJob, List<String> keywords) {
-        this.webScanningJob = webScanningJob;
+    public WebScannerWorker(String webUrl, List<String> keywords) {
+        this.webUrl = webUrl;
         this.keywords = keywords;
     }
 
@@ -25,7 +24,7 @@ public class WebScannerWorker implements Callable<Map<String, Integer>> {
     public Map<String, Integer> call() {
 
         Map<String, Integer> results = new HashMap<>();
-        String webUrl = this.webScanningJob.getWebUrl();
+        String webUrl = this.webUrl;
         Document doc = null;
         try {
             doc = Jsoup.connect(webUrl).get();

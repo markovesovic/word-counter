@@ -1,7 +1,5 @@
 package scanner.file;
 
-import jobs.FileScanningJob;
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -15,21 +13,22 @@ import java.util.regex.Pattern;
 
 public class FileScannerWorker implements Callable<Map<String, Integer>> {
 
-    private final FileScanningJob fileScanningJob;
+    private final List<File> files;
     private final List<String> keywords;
 
-    public FileScannerWorker(FileScanningJob fileScanningJob, List<String> keywords) {
-        this.fileScanningJob = fileScanningJob;
+    public FileScannerWorker(List<File> files, List<String> keywords) {
+        this.files = files;
         this.keywords = keywords;
     }
 
     @Override
     public Map<String, Integer> call() throws Exception {
 
+
         Map<String, Integer> occurrences = new HashMap<>();
 
         // For each file given in file scanning job
-        for (File f : this.fileScanningJob.getFiles()) {
+        for (File f : this.files) {
             try {
                 // Read file
                 List<String> content = Files.readAllLines(Paths.get(f.getAbsolutePath()));

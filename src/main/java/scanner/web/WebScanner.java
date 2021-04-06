@@ -1,9 +1,8 @@
 package scanner.web;
 
-import jobs.ResultJob;
-import jobs.ScanningJob;
-import jobs.ScanningJobType;
+import jobs.Job;
 import jobs.WebScanningJob;
+import jobs.WebScanningResultJob;
 import main.Stoppable;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -18,8 +17,8 @@ import java.util.concurrent.*;
 
 public class WebScanner implements Runnable, Stoppable {
 
-    private final BlockingQueue<ScanningJob> webScanningJobs;
-    private final ConcurrentLinkedQueue<ResultJob> resultJobs;
+    private final BlockingQueue<WebScanningJob> webScanningJobs;
+    private final ConcurrentLinkedQueue<Job> resultJobs;
     private final ExecutorService threadPool;
     private final ExecutorCompletionService<Map<String, Integer>> completionService;
     private final Map<String, Object> watchedUrls;
@@ -27,8 +26,8 @@ public class WebScanner implements Runnable, Stoppable {
 
     private volatile boolean forever = true;
 
-    public WebScanner(BlockingQueue<ScanningJob> webScanningJobs,
-                      ConcurrentLinkedQueue<ResultJob> resultJobs,
+    public WebScanner(BlockingQueue<WebScanningJob> webScanningJobs,
+                      ConcurrentLinkedQueue<Job> resultJobs,
                       ExecutorService threadPool,
                       ExecutorCompletionService<Map<String, Integer>> completionService,
                       Map<String, Object> watchedUrls,
@@ -47,15 +46,14 @@ public class WebScanner implements Runnable, Stoppable {
 
             while(!this.webScanningJobs.isEmpty()) {
 
-                ScanningJob scanningJob = this.webScanningJobs.poll();
+                WebScanningJob job = this.webScanningJobs.poll();
 
-                System.out.println("Job: " + scanningJob.getPath() + ", hopCount: " + scanningJob.getHopCount());
-
-                if(scanningJob.isPoisonous()) {
+                if(job.isPoisonous()) {
                     break;
                 }
-                String webUrl = scanningJob.getPath();
-                int hopCount = scanningJob.getHopCount();
+
+                String webUrl = job.getUrl();
+                int hopCount = job.getHopCount();
 
                 if(this.watchedUrls.containsKey(webUrl)) {
                     continue;
@@ -65,12 +63,11 @@ public class WebScanner implements Runnable, Stoppable {
 
                 findOtherUrls(webUrl, hopCount - 1);
 
-                WebScanningJob webScanningJob = new WebScanningJob(webUrl);
-                this.completionService.submit(new WebScannerWorker(webScanningJob, this.keywords));
+                this.completionService.submit(new WebScannerWorker(webUrl, this.keywords));
+
                 try {
-                    List<Future<Map<String, Integer>>> occurrences = new ArrayList<>();
-                    occurrences.add(this.completionService.take());
-                    ResultJob resultJob = new ResultJob(ScanningJobType.WEB_SCANNING_JOB, webUrl, occurrences);
+                    Future<Map<String, Integer>> occurrences = this.completionService.take();
+                    WebScanningResultJob resultJob = new WebScanningResultJob(occurrences, webUrl);
                     this.resultJobs.add(resultJob);
 
                 } catch (InterruptedException e) {
@@ -93,7 +90,7 @@ public class WebScanner implements Runnable, Stoppable {
                 String newLink = link.attr("abs:href");
                 newLink = remoteQuery(newLink);
                 if(!this.watchedUrls.containsKey(newLink)) {
-                    this.webScanningJobs.add(new ScanningJob(newLink, hopCount));
+                    this.webScanningJobs.add(new WebScanningJob(newLink, hopCount));
                 }
             }
         } catch (IOException e) {
@@ -118,6 +115,6 @@ public class WebScanner implements Runnable, Stoppable {
     public void stop() {
         this.forever = false;
         this.threadPool.shutdown();
-        this.webScanningJobs.add(new ScanningJob());
+        this.webScanningJobs.add(new WebScanningJob());
     }
 }

@@ -1,19 +1,20 @@
 package jobs;
 
+public class FileScanningJob extends Job {
 
-import java.io.File;
-import java.util.List;
+    private final String path;
 
-public class FileScanningJob {
-
-    private final List<File> files;
-
-    public FileScanningJob(List<File> files) {
-        this.files = files;
+    public FileScanningJob(String path) {
+        super(false);
+        this.path = path;
     }
 
-    public List<File> getFiles() {
-        return this.files;
+    public FileScanningJob() {
+        super(true);
+        this.path = "";
     }
 
+    public String getPath() {
+        return this.path;
+    }
 }

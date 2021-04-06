@@ -1,7 +1,8 @@
 package directory_crawler;
 
 import jobs.CrawlerJob;
-import jobs.ScanningJob;
+import jobs.FileScanningJob;
+import jobs.Job;
 import main.Stoppable;
 
 import java.io.File;
@@ -14,8 +15,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class DirectoryCrawler implements Stoppable, Runnable {
 
-    private final ConcurrentLinkedQueue<CrawlerJob> directoryNames;
-    private final ConcurrentLinkedQueue<ScanningJob> scanningJobs;
+    private final ConcurrentLinkedQueue<CrawlerJob> crawlingJobs;
+    private final ConcurrentLinkedQueue<Job> jobs;
     private final Map<String, Object> watchedDirectories;
     private final String fileCorpusPrefix;
     private final int dirCrawlerSleepTime;
@@ -23,12 +24,13 @@ public class DirectoryCrawler implements Stoppable, Runnable {
     private final HashMap<String, Long> lastModifiedValueForFiles = new HashMap<>();
     private boolean forever = true;
 
-    public DirectoryCrawler(ConcurrentLinkedQueue<CrawlerJob> directoryNames,
-                            ConcurrentLinkedQueue<ScanningJob> scanningJobs,
+    public DirectoryCrawler(ConcurrentLinkedQueue<CrawlerJob> crawlingJobs,
+                            ConcurrentLinkedQueue<Job> jobs,
                             Map<String, Object> watchedDirectories, String fileCorpusPrefix,
                             int dirCrawlerSleepTime) {
-        this.directoryNames = directoryNames;
-        this.scanningJobs = scanningJobs;
+
+        this.crawlingJobs = crawlingJobs;
+        this.jobs = jobs;
         this.watchedDirectories = watchedDirectories;
         this.fileCorpusPrefix = fileCorpusPrefix;
         this.dirCrawlerSleepTime = dirCrawlerSleepTime;
@@ -38,14 +40,12 @@ public class DirectoryCrawler implements Stoppable, Runnable {
     public void run() {
         while(this.forever) {
 
-            while(!this.directoryNames.isEmpty()) {
+            while(!this.crawlingJobs.isEmpty()) {
 
                 // Get directory name
-                CrawlerJob crawlerJob = this.directoryNames.poll();
+                CrawlerJob crawlerJob = this.crawlingJobs.poll();
                 assert crawlerJob != null;
                 String directoryName = crawlerJob.getDirectoryName();
-
-//                System.out.println("Directory crawler - Crawling job received: " + directoryName);
 
                 if(crawlerJob.isPoisonous()) {
                     break;
@@ -54,7 +54,7 @@ public class DirectoryCrawler implements Stoppable, Runnable {
                 // Search for all suitable subdirectories
                 this.searchDir(directoryName);
                 // Add this directory to be tracked forever for changes
-                this.directoryNames.add(crawlerJob);
+                this.crawlingJobs.add(crawlerJob);
 
                 // Sleep for fixed time
                 try {
@@ -117,8 +117,8 @@ public class DirectoryCrawler implements Stoppable, Runnable {
         // Add new job with current dir
         if(directory.getName().startsWith(this.fileCorpusPrefix) && isCorpus && isMatch) {
 
-            ScanningJob scanningJob = new ScanningJob(directoryName);
-            this.scanningJobs.add(scanningJob);
+            Job job = new FileScanningJob(directoryName);
+            this.jobs.add(job);
 
             directoryName = directoryName.replace("\\", "/");
             String corpusName = directoryName.split("/")[directoryName.split("/").length - 1];
@@ -136,6 +136,6 @@ public class DirectoryCrawler implements Stoppable, Runnable {
     @Override
     public void stop() {
         this.forever = false;
-        this.directoryNames.add(new CrawlerJob());
+        this.crawlingJobs.add(new CrawlerJob());
     }
 }

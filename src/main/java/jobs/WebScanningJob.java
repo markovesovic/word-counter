@@ -1,15 +1,28 @@
 package jobs;
 
-public class WebScanningJob {
 
-    private final String webUrl;
+public class WebScanningJob extends Job {
 
-    public WebScanningJob(String webUrl) {
-        this.webUrl = webUrl;
+    private final String url;
+    private final int hopCount;
+
+    public WebScanningJob(String url, int hopCount) {
+        super(false);
+        this.url = url;
+        this.hopCount = hopCount;
     }
 
-    public String getWebUrl() {
-        return this.webUrl;
+    public WebScanningJob() {
+        super(true);
+        this.url = "";
+        this.hopCount = -1;
     }
 
+    public String getUrl() {
+        return url;
+    }
+
+    public int getHopCount() {
+        return hopCount;
+    }
 }

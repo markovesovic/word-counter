@@ -1,7 +1,8 @@
 package job_dispatcher;
 
-import jobs.ScanningJob;
-import jobs.ScanningJobType;
+import jobs.FileScanningJob;
+import jobs.Job;
+import jobs.WebScanningJob;
 import main.Stoppable;
 
 import java.util.concurrent.BlockingQueue;
@@ -9,16 +10,16 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class JobDispatcher implements Runnable, Stoppable {
 
-    private final ConcurrentLinkedQueue<ScanningJob> scanningJobs;
-    private final BlockingQueue<ScanningJob> fileScanningJobs;
-    private final BlockingQueue<ScanningJob> webScanningJobs;
+    private final ConcurrentLinkedQueue<Job> jobs;
+    private final BlockingQueue<FileScanningJob> fileScanningJobs;
+    private final BlockingQueue<WebScanningJob> webScanningJobs;
 
     private volatile boolean forever = true;
 
-    public JobDispatcher(ConcurrentLinkedQueue<ScanningJob> scanningJobs,
-                         BlockingQueue<ScanningJob> fileScanningJobs,
-                         BlockingQueue<ScanningJob> webScanningJobs) {
-        this.scanningJobs = scanningJobs;
+    public JobDispatcher(ConcurrentLinkedQueue<Job> jobs,
+                         BlockingQueue<FileScanningJob> fileScanningJobs,
+                         BlockingQueue<WebScanningJob> webScanningJobs) {
+        this.jobs = jobs;
         this.fileScanningJobs = fileScanningJobs;
         this.webScanningJobs = webScanningJobs;
     }
@@ -27,29 +28,20 @@ public class JobDispatcher implements Runnable, Stoppable {
     public void run() {
         while(this.forever) {
 
-            while(!this.scanningJobs.isEmpty()) {
-                ScanningJob scanningJob = this.scanningJobs.poll();
+            while(!this.jobs.isEmpty()) {
 
-//                System.out.println("Job dispatcher - Scanning job received " + scanningJob.getPath());
+                Job job = this.jobs.poll();
 
-                // Break loop and then finish
-                if(scanningJob.isPoisonous()) {
+                if(job.isPoisonous()) {
                     break;
                 }
 
-                // Delegate file scanning job
-                if(scanningJob.getType() == ScanningJobType.FILE_SCANNING_JOB) {
-//                    System.out.println("File scanning job received: " + scanningJob.getPath());
-
-                    this.fileScanningJobs.add(scanningJob);
-
+                if(job instanceof FileScanningJob) {
+                    this.fileScanningJobs.add((FileScanningJob) job);
                 }
 
-                // Delegate web scanning job
-                if(scanningJob.getType() == ScanningJobType.WEB_SCANNING_JOB) {
-//                    System.out.println("Web scanning job received: " + scanningJob.getPath());
-
-                    this.webScanningJobs.add(scanningJob);
+                if(job instanceof WebScanningJob) {
+                    this.webScanningJobs.add((WebScanningJob) job);
                 }
             }
 
@@ -68,6 +60,6 @@ public class JobDispatcher implements Runnable, Stoppable {
     @Override
     public void stop() {
         this.forever = false;
-        this.scanningJobs.add(new ScanningJob());
+        this.jobs.add(new Job(true));
     }
 }

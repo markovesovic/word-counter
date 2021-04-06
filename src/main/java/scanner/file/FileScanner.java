@@ -1,9 +1,8 @@
 package scanner.file;
 
 import jobs.FileScanningJob;
-import jobs.ResultJob;
-import jobs.ScanningJob;
-import jobs.ScanningJobType;
+import jobs.FileScanningResultJob;
+import jobs.Job;
 import main.Stoppable;
 
 import java.io.File;
@@ -14,8 +13,8 @@ import java.util.concurrent.*;
 
 public class FileScanner implements Runnable, Stoppable {
 
-    private final BlockingQueue<ScanningJob> fileScanningJobs;
-    private final ConcurrentLinkedQueue<ResultJob> resultJobs;
+    private final BlockingQueue<FileScanningJob> fileScanningJobs;
+    private final ConcurrentLinkedQueue<Job> resultJobs;
     private final ExecutorService threadPool;
     private final ExecutorCompletionService<Map<String, Integer>> completionService;
     private final int fileScanningJobLimit;
@@ -23,8 +22,8 @@ public class FileScanner implements Runnable, Stoppable {
 
     private volatile boolean forever = true;
 
-    public FileScanner(BlockingQueue<ScanningJob> fileScanningJobs,
-                       ConcurrentLinkedQueue<ResultJob> resultJobs,
+    public FileScanner(BlockingQueue<FileScanningJob> fileScanningJobs,
+                       ConcurrentLinkedQueue<Job> resultJobs,
                        ExecutorService threadPool,
                        ExecutorCompletionService<Map<String, Integer>> completionService,
                        int fileScanningJobLimit,
@@ -43,26 +42,17 @@ public class FileScanner implements Runnable, Stoppable {
         while(this.forever) {
 
             while(!this.fileScanningJobs.isEmpty()) {
-                ScanningJob scanningJob = this.fileScanningJobs.poll();
+                FileScanningJob fileScanningJob = this.fileScanningJobs.poll();
 
-//                System.out.println("File scanner - file scanning job received " + scanningJob.getPath());
-
-                if(scanningJob.isPoisonous()) {
-//                    this.threadPool.shutdown();
-//                    System.out.println("File scanner waiting for threadPool");
-//                    while (!this.threadPool.isShutdown()) {
-//
-//                    }
+                if(fileScanningJob.isPoisonous()) {
                     break;
                 }
 
-                String directoryName = scanningJob.getPath();
+                String directoryName = fileScanningJob.getPath();
 
-                // Divide work between file scanning workers
-                List<FileScanningJob> jobs = divideWork(directoryName);
+                List<List<File>> jobs = divideWork(directoryName);
 
-                // Starting jobs in completionService
-                for(FileScanningJob job : jobs) {
+                for(List<File> job : jobs) {
                     this.completionService.submit(new FileScannerWorker(job, keywords));
                 }
 
@@ -78,7 +68,7 @@ public class FileScanner implements Runnable, Stoppable {
                 }
                 directoryName = directoryName.replace("\\", "/");
                 String corpusName = directoryName.split("/")[directoryName.split("/").length - 1];
-                ResultJob resultJob = new ResultJob(ScanningJobType.FILE_SCANNING_JOB, corpusName, occurrences);
+                FileScanningResultJob resultJob = new FileScanningResultJob(occurrences, corpusName);
                 this.resultJobs.add(resultJob);
 
             }
@@ -86,8 +76,8 @@ public class FileScanner implements Runnable, Stoppable {
         System.out.println("File scanner shutting down");
     }
 
-    private List<FileScanningJob> divideWork(String directoryName) {
-        List<FileScanningJob> jobs = new ArrayList<>();
+    private List<List<File>> divideWork(String directoryName) {
+        List<List<File>> jobs = new ArrayList<>();
         List<File> files = new ArrayList<>();
         int currentSize = 0;
 
@@ -100,12 +90,12 @@ public class FileScanner implements Runnable, Stoppable {
                 currentSize += f.length();
                 continue;
             }
-            jobs.add(new FileScanningJob(new ArrayList<>(files)));
+            jobs.add(new ArrayList<>(files));
             files.clear();
             files.add(f);
             currentSize = (int) f.length();
         }
-        jobs.add(new FileScanningJob(new ArrayList<>(files)));
+        jobs.add(new ArrayList<>(files));
         return jobs;
     }
 
@@ -113,6 +103,11 @@ public class FileScanner implements Runnable, Stoppable {
     public void stop() {
         this.forever = false;
         this.threadPool.shutdown();
-        this.fileScanningJobs.add(new ScanningJob());
+        try {
+            this.threadPool.awaitTermination(10, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        this.fileScanningJobs.add(new FileScanningJob());
     }
 }
