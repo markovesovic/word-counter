@@ -31,6 +31,7 @@ public class WebScannerWorker implements Callable<Map<String, Integer>> {
             doc = Jsoup.connect(webUrl).get();
         } catch(Exception e) {
             System.out.println("Url: " + webUrl + " cannot be accessed");
+            return null;
         }
 
         assert doc != null;

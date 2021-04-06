@@ -18,10 +18,8 @@ public class DomainMergerWorker implements Callable<Map<String, Integer>> {
 
         Map<String, Integer> result = new HashMap<>();
         this.jobs.forEach(job -> {
-            this.jobs.forEach(occurrence -> {
-                occurrence.forEach((key, value) -> {
-                    result.merge(key, value, Integer::sum);
-                });
+            job.forEach((key, value) -> {
+                result.merge(key, value, Integer::sum);
             });
         });
 

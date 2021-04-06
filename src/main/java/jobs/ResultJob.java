@@ -44,6 +44,9 @@ public class ResultJob implements Poisonable {
 
             try {
                 Map<String, Integer> localOccurrences = future.get();
+                if(localOccurrences == null) {
+                    continue;
+                }
                 localOccurrences.forEach((key, value) -> this.calculatedResult.merge(key, value, Integer::sum));
 
             } catch (InterruptedException | ExecutionException e) {

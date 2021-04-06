@@ -143,6 +143,7 @@ public class ResultRetriever implements Runnable, Stoppable {
 
     public Map<String, Integer> getFileScanResultSummary() {
         if(!this.fileSummary.isEmpty()) {
+            System.out.println("Cached");
             return this.fileSummary;
         }
 
@@ -162,7 +163,7 @@ public class ResultRetriever implements Runnable, Stoppable {
         }
         this.cookedOccurrences.forEach((key, value) -> {
             UrlValidator urlValidator = new UrlValidator(new String[]{"http", "https"});
-            if(!urlValidator.isValid(key)) {
+            if(urlValidator.isValid(key)) {
                 value.forEach((localKey, localValue) -> webSummary.merge(localKey, localValue, Integer::sum));
             }
         });
