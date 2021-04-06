@@ -55,7 +55,7 @@ public class FileScannerWorker implements Callable<Map<String, Integer>> {
                     occurrences.put(keyword, count);
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                System.out.println("File: " + f.getPath() + ", cannot be read");
             }
         }
         return occurrences;

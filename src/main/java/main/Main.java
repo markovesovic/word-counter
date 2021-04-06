@@ -144,12 +144,12 @@ public class Main {
             }
 
             if(line.equals("cfs")) {
-                System.out.println("cfs");
+                resultRetriever.clearFileSummary();
                 continue;
             }
 
             if(line.equals("cws")) {
-                System.out.println("cws");
+                resultRetriever.clearWebSummary();
                 continue;
             }
 
@@ -203,17 +203,19 @@ public class Main {
 
                 // Finding summary
                 if(param.endsWith("|summary")) {
-                    ScanningJobType type = (param.startsWith("file|")) ? ScanningJobType.FILE_SCANNING_JOB : ScanningJobType.WEB_SCANNING_JOB;
-                    Map<String, Integer> result = resultRetriever.getResultSummary(type);
-                    result.forEach((key, value) -> System.out.println(key + ": " + value));
-                    continue;
+                    Map<String, Integer> result = (param.startsWith("file|")) ? resultRetriever.getFileScanResultSummary() : resultRetriever.getWebScanResultSummary();
+                    if(result != null) {
+                        result.forEach((key, value) -> System.out.println(key + ": " + value));
+                        continue;
+                    }
+
                 }
 
                 String corpusName = param.split("\\|")[1];
                 // Finding for corpus
                 if(param.startsWith("file|")) {
                     corpusName = "corpus_" + corpusName;
-                    Map<String, Integer> result = resultRetriever.getResult(corpusName, ScanningJobType.FILE_SCANNING_JOB);
+                    Map<String, Integer> result = resultRetriever.getFileScanResult(corpusName);
                     if(result != null) {
                         System.out.println(result);
                     }
@@ -222,7 +224,11 @@ public class Main {
 
                 // Finding for web
                 if(param.startsWith("web|")) {
-                    Map<String, Integer> result = resultRetriever.getResult(corpusName, ScanningJobType.WEB_SCANNING_JOB);
+                    if(corpusName.contains("\\") || corpusName.contains("/") || !corpusName.contains(".")) {
+                        System.out.println("Non valid web domain");
+                        continue;
+                    }
+                    Map<String, Integer> result = resultRetriever.getWebScanResult(corpusName);
                     if(result != null) {
                         System.out.println(result);
                     }
@@ -240,7 +246,7 @@ public class Main {
 
                 if(param.startsWith("file|")) {
                     corpusName = "corpus_" + corpusName;
-                    Map<String, Integer> result = resultRetriever.queryResult(corpusName, ScanningJobType.FILE_SCANNING_JOB);
+                    Map<String, Integer> result = resultRetriever.queryFileScanResult(corpusName);
                     if(result != null) {
                         System.out.println(result);
                     }
@@ -249,11 +255,7 @@ public class Main {
                 if(param.startsWith("web|")) {
 
                 }
-
-                System.out.println("query");
             }
-
-
         }
         sc.close();
 
