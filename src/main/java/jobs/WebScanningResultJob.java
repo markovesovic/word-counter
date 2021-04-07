@@ -18,13 +18,6 @@ public class WebScanningResultJob extends Job {
         this.webUrl = webUrl;
     }
 
-    public Map<String, Integer> queryResult() {
-        if(this.result.isEmpty()) {
-            return this.result;
-        }
-        return null;
-    }
-
     public Map<String, Integer> getResult() {
         if(!this.result.isEmpty()) {
             return this.result;
@@ -36,8 +29,12 @@ public class WebScanningResultJob extends Job {
             }
             localOccurrences.forEach((key, value) -> this.result.merge(key, value, Integer::sum));
 
-        } catch (InterruptedException | ExecutionException e) {
-            System.out.println("Ovde puca");
+        } catch (InterruptedException e) {
+            System.out.println("InterruptedException");
+        } catch (ExecutionException e) {
+            System.out.println("ExecutionException");
+        } catch (NullPointerException e ) {
+            System.out.println("NullPointerException");
         }
         return this.result;
     }

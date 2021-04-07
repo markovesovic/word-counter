@@ -4,9 +4,7 @@ import jobs.FileScanningResultJob;
 import jobs.Job;
 import jobs.WebScanningResultJob;
 import main.Stoppable;
-import org.apache.commons.validator.routines.UrlValidator;
 
-import java.io.File;
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -22,47 +20,39 @@ public class ResultRetriever implements Runnable, Stoppable {
     private final ExecutorService threadPool;
     private final ExecutorCompletionService<Map<String, Integer>> completionService;
 
-    private final Map<String, Object> watchedDirectories;
     private final Map<String, Object> watchedUrls;
+    private final Map<String, Object> availableDomains;
 
     private final Map<String, FileScanningResultJob> pendingFileScanningResultJobs;
     private final Map<String, WebScanningResultJob> pendingWebScanningResultJobs;
     private final Map<String, Future<Map<String, Integer>>> cachedDomains;
-//    private final Map<String, Map<String, Integer>> fileScanningResults;
-//    private final Map<String, Map<String, Integer>> webScanningResults;
 
-
-    private final Map<String, Map<String, Integer>> cookedOccurrences;
-    private final Map<String, Map<String, Integer>> cachedWebOccurrences;
-    private final Map<String, Integer> webSummary;
-    private final Map<String, Integer> fileSummary;
+    private Map<String, Map<String, Integer>> fileScanResultSummary;
+    private Map<String, Future<Map<String, Integer>>> webScanResultSummary;
 
     private final ScheduledExecutorService cron;
 
     public ResultRetriever(ConcurrentLinkedQueue<Job> resultJobs,
-                           ExecutorService threadPool,
-                           ExecutorCompletionService<Map<String, Integer>> completionService,
                            Map<String, Object> watchedDirectories,
                            Map<String, Object> watchedUrls,
+                           Map<String, Object> availableDomains,
                            int urlRefreshTime) {
 
         this.resultJobs = resultJobs;
-        this.threadPool = threadPool;
-        this.completionService = completionService;
-        this.watchedDirectories = watchedDirectories;
-        this.watchedUrls = watchedUrls;
+        this.threadPool = Executors.newCachedThreadPool();
+        this.completionService = new ExecutorCompletionService<>(this.threadPool);
         this.urlRefreshTime = urlRefreshTime;
+
+        this.watchedUrls = watchedUrls;
+        this.availableDomains =availableDomains;
 
         this.pendingFileScanningResultJobs = new HashMap<>();
         this.pendingWebScanningResultJobs = new HashMap<>();
         this.cachedDomains = new HashMap<>();
-//        this.fileScanningResults = new HashMap<>();
-//        this.webScanningResults = new HashMap<>();
 
-        this.cookedOccurrences = new ConcurrentHashMap<>();
-        this.cachedWebOccurrences = new ConcurrentHashMap<>();
-        this.webSummary = new ConcurrentHashMap<>();
-        this.fileSummary = new ConcurrentHashMap<>();
+        this.fileScanResultSummary = new HashMap<>();
+        this.webScanResultSummary = new HashMap<>();
+
         cron = Executors.newScheduledThreadPool(1);
         startCron();
     }
@@ -87,7 +77,6 @@ public class ResultRetriever implements Runnable, Stoppable {
                 if(resultJob instanceof WebScanningResultJob) {
                     this.pendingWebScanningResultJobs.put(((WebScanningResultJob) resultJob).getWebUrl(), (WebScanningResultJob) resultJob);
                 }
-
             }
         }
         System.out.println("Result retriever shutting down");
@@ -117,9 +106,27 @@ public class ResultRetriever implements Runnable, Stoppable {
         return resultMap;
     }
 
+    public Map<String, Map<String, Integer>> getFileScanResultSummary() {
+
+        if(!this.fileScanResultSummary.isEmpty()) {
+            return this.fileScanResultSummary;
+        }
+
+        Map<String, Map<String, Integer>> result = new HashMap<>();
+
+        this.pendingFileScanningResultJobs.forEach((key, value) -> {
+            result.put(key, value.getResult());
+        });
+        this.fileScanResultSummary = new HashMap<>(result);
+
+        return result;
+    }
+
     public Map<String, Integer> getWebScanResult(String domain) {
+
         if(this.cachedDomains.containsKey(domain)) {
             try {
+                System.out.println("Results are cached");
                 return this.cachedDomains.get(domain).get();
             } catch (InterruptedException | ExecutionException e) {
                 e.printStackTrace();
@@ -132,21 +139,31 @@ public class ResultRetriever implements Runnable, Stoppable {
                 results.add(value);
             }
         });
+
+        if(results.isEmpty()) {
+            System.out.println("There are no pages for given domain!");
+            return null;
+        }
+
         Future<Map<String, Integer>> future = this.completionService.submit(new DomainMergerWorker(results));
         this.cachedDomains.put(domain, future);
         try {
             return future.get();
-        } catch (InterruptedException | ExecutionException e) {
+        } catch (InterruptedException e) {
             e.printStackTrace();
+        } catch (ExecutionException e) {
+            System.out.println(e.getMessage());
         }
         return null;
     }
 
     public Map<String, Integer> queryWebScanResult(String domain) {
+
         if(this.cachedDomains.containsKey(domain)) {
             Future<Map<String, Integer>> result = this.cachedDomains.get(domain);
             if(result.isDone()) {
                 try {
+                    System.out.println("Results are cached");
                     return result.get();
                 } catch (InterruptedException | ExecutionException e) {
                     e.printStackTrace();
@@ -155,159 +172,137 @@ public class ResultRetriever implements Runnable, Stoppable {
             System.out.println("Result is not ready yet");
             return null;
         }
+
         List<WebScanningResultJob> results = new ArrayList<>();
-        this.pendingWebScanningResultJobs.forEach((key, value) -> {
-            if(key.contains(domain)) {
-                results.add(value);
+        this.pendingWebScanningResultJobs.forEach((url, job) -> {
+            if(url.contains(domain)) {
+                results.add(job);
             }
         });
+
+        if(results.isEmpty()) {
+            System.out.println("There are no pages for given domain");
+        }
+
         Future<Map<String, Integer>> future = this.completionService.submit(new DomainMergerWorker(results));
         this.cachedDomains.put(domain, future);
-
+        if(future.isDone()) {
+            try {
+                return future.get();
+            } catch (InterruptedException | ExecutionException e) {
+                e.printStackTrace();
+            }
+        }
         System.out.println("Result is not yet ready");
 
         return null;
     }
 
+    public Map<String, Map<String, Integer>> getWebScanResultSummary() {
+        Map<String, Map<String, Integer>> results = new HashMap<>();
 
-//    public Map<String, Integer> getFileScanResult(String corpusName) {
-//
-//        if (!this.watchedDirectories.containsKey(corpusName)) {
-//            System.out.println("Given corpus was never added!");
-//            return null;
-//        }
-//
-//        while(!this.cookedOccurrences.containsKey(corpusName)) {
-//            try {
-//                Thread.sleep(100);
-//            } catch (InterruptedException e) {
-//                e.printStackTrace();
-//            }
-//        }
-//        return this.cookedOccurrences.get(corpusName);
-//
-//    }
-//
-//    public Map<String, Integer> queryFileScanResult(String corpusName) {
-//
-//        if(!this.watchedDirectories.containsKey(corpusName)) {
-//            System.out.println("Given corpus was never added!");
-//            return null;
-//        }
-//        if(this.cookedOccurrences.containsKey(corpusName)) {
-//            return this.cookedOccurrences.get(corpusName);
-//        }
-//        System.out.println("Result is not yet ready");
-//        return null;
-//    }
-//
-//    public Map<String, Integer> getWebScanResult(String corpusName) {
-//        boolean exists = doesWebCorpusExist(corpusName);
-//        if(!exists) {
-//            return null;
-//        }
-//
-//        if(this.cachedWebOccurrences.containsKey(corpusName)) {
-//            System.out.println("Cached data");
-//            return this.cachedWebOccurrences.get(corpusName);
-//        }
-//
-//        List<Map<String, Integer>> jobs = new ArrayList<>();
-//        this.cookedOccurrences.forEach((key, value) -> {
-//            if(key.contains(corpusName)) {
-//                jobs.add(value);
-//            }
-//        });
-//        try {
-//            System.out.println("Calculating all results");
-//            Map<String, Integer> result = this.completionService.submit(new DomainMergerWorker(jobs)).get();
-//            this.cachedWebOccurrences.put(corpusName, result);
-//            return result;
-//        } catch (InterruptedException | ExecutionException e) {
-//            e.printStackTrace();
-//        }
-//        return null;
-//
-//    }
-//
-//    public Map<String, Integer> queryWebScanResult(String corpusName) {
-//        boolean exists = doesWebCorpusExist(corpusName);
-//        if(!exists) {
-//            return null;
-//        }
-//        return new HashMap<>();
-//    }
-//
-//    public Map<String, Integer> getFileScanResultSummary() {
-//        if(!this.fileSummary.isEmpty()) {
-//            System.out.println("Cached");
-//            return this.fileSummary;
-//        }
-//
-//        this.cookedOccurrences.forEach((key, value) -> {
-//            UrlValidator urlValidator = new UrlValidator(new String[]{"http", "https"});
-//            if (!urlValidator.isValid(key)) {
-//                value.forEach((localKey, localValue) -> fileSummary.merge(localKey, localValue, Integer::sum));
-//            }
-//        });
-//
-//        return this.fileSummary;
-//    }
-//
-//    public Map<String, Integer> getWebScanResultSummary() {
-//        if(!this.webSummary.isEmpty()) {
-//            return this.webSummary;
-//        }
-//        this.cookedOccurrences.forEach((key, value) -> {
-//            UrlValidator urlValidator = new UrlValidator(new String[]{"http", "https"});
-//            if(urlValidator.isValid(key)) {
-//                value.forEach((localKey, localValue) -> webSummary.merge(localKey, localValue, Integer::sum));
-//            }
-//        });
-//
-//        return this.webSummary;
-//    }
-//
-//
-//
-//    private boolean doesWebCorpusExist(String corpusName) {
-//        boolean exists = false;
-//        for(String key : this.watchedUrls.keySet()) {
-//            if (key.contains(corpusName)) {
-//                exists = true;
-//                break;
-//            }
-//        }
-//        if(!exists) {
-//            System.out.println("No corpus under given domain");
-//            return  false;
-//        }
-//        return true;
-//    }
-//
-//
-//    public void Test() {
-//        if(this.cookedOccurrences.isEmpty()) {
-//            System.out.println("empty");
-//            return;
-//        }
-//        this.cookedOccurrences.forEach((key, value) -> {
-//            System.out.println(key + ": " + value);
-//        });
-//    }
+        if(!this.webScanResultSummary.isEmpty()) {
+            for(String key : this.webScanResultSummary.keySet()) {
+                try {
+                    results.put(key, this.webScanResultSummary.get(key).get());
+                } catch (InterruptedException | ExecutionException e) {
+                    e.printStackTrace();
+                }
+            }
+            return results;
+        }
+
+        startWebSummaryJob();
+
+        return this.getWebScanResultSummary();
+    }
+
+    public Map<String, Map<String, Integer>> queryWebScanResultSummary() {
+
+        Map<String, Map<String, Integer>> results = new HashMap<>();
+
+        if(!this.webScanResultSummary.isEmpty()) {
+            boolean isDone = true;
+            for(Future<Map<String, Integer>> action : this.webScanResultSummary.values()) {
+                if(!action.isDone()) {
+                    isDone = false;
+                }
+            }
+            if(isDone) {
+                for(String key : this.webScanResultSummary.keySet()) {
+                    try {
+                        results.put(key, this.webScanResultSummary.get(key).get());
+                    } catch (InterruptedException | ExecutionException e) {
+                        e.printStackTrace();
+                    }
+                }
+                return results;
+            }
+            System.out.println("Results are not ready yet");
+            return null;
+        }
+
+        startWebSummaryJob();
+
+        return this.queryWebScanResultSummary();
+    }
+
+    private void startWebSummaryJob() {
+        Map<String, List<WebScanningResultJob>> data = new HashMap<>();
+
+        this.availableDomains.forEach((domain, o) -> {
+            data.put(domain, new ArrayList<>());
+        });
+
+        this.pendingWebScanningResultJobs.forEach((url, job) -> {
+            String matchingDomain = "";
+            for (String domainName : this.availableDomains.keySet()) {
+                if (url.contains(domainName)) {
+                    matchingDomain = domainName;
+                    break;
+                }
+            }
+            if(!matchingDomain.equals("")) {
+                data.get(matchingDomain).add(job);
+            }
+        });
+
+        this.availableDomains.forEach((domain, o) -> {
+            Future<Map<String, Integer>> result = this.completionService.submit(new DomainMergerWorker(data.get(domain)));
+            this.webScanResultSummary.put(domain, result);
+        });
+    }
+
+    public void Test() {
+        this.cachedDomains.forEach((key, value) -> {
+            System.out.println(key);
+            try {
+                System.out.println(value.get());
+            } catch (InterruptedException | ExecutionException e) {
+                e.printStackTrace();
+            }
+            System.out.println();
+        });
+    }
+
+    public void domains() {
+        this.availableDomains.forEach((key, value) -> {
+            System.out.println(key);
+        });
+    }
 
 
-//    public void clearFileSummary() {
-//        this.fileSummary.clear();
-//    }
-//
-//    public void clearWebSummary() {
-//        this.webSummary.clear();
-//    }
+    public void clearFileSummary() {
+        this.fileScanResultSummary.clear();
+    }
+
+    public void clearWebSummary() {
+        this.webScanResultSummary.clear();
+    }
 
     private void startCron() {
         final Runnable cronJob = this.watchedUrls::clear;
-        final ScheduledFuture<?> cronHandle = this.cron.scheduleAtFixedRate(cronJob, 0, this.urlRefreshTime, SECONDS);
+        this.cron.scheduleAtFixedRate(cronJob, 0, this.urlRefreshTime, SECONDS);
     }
 
     @Override
@@ -317,4 +312,6 @@ public class ResultRetriever implements Runnable, Stoppable {
         this.cron.shutdownNow();
         this.resultJobs.add(new Job(true));
     }
+
+
 }

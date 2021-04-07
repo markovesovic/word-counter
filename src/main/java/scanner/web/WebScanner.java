@@ -22,21 +22,22 @@ public class WebScanner implements Runnable, Stoppable {
     private final ExecutorService threadPool;
     private final ExecutorCompletionService<Map<String, Integer>> completionService;
     private final Map<String, Object> watchedUrls;
+    private final Map<String, Object> availableDomains;
     private final List<String> keywords;
 
     private volatile boolean forever = true;
 
     public WebScanner(BlockingQueue<WebScanningJob> webScanningJobs,
                       ConcurrentLinkedQueue<Job> resultJobs,
-                      ExecutorService threadPool,
-                      ExecutorCompletionService<Map<String, Integer>> completionService,
                       Map<String, Object> watchedUrls,
+                      Map<String, Object> availableDomains,
                       List<String> keywords) {
         this.webScanningJobs = webScanningJobs;
         this.resultJobs = resultJobs;
-        this.threadPool = threadPool;
-        this.completionService = completionService;
+        this.threadPool = Executors.newCachedThreadPool();
+        this.completionService = new ExecutorCompletionService<>(this.threadPool);
         this.watchedUrls = watchedUrls;
+        this.availableDomains = availableDomains;
         this.keywords = keywords;
     }
 
@@ -49,6 +50,12 @@ public class WebScanner implements Runnable, Stoppable {
                 WebScanningJob job = this.webScanningJobs.poll();
 
                 if(job.isPoisonous()) {
+                    try {
+                        boolean awaited = this.threadPool.awaitTermination(10, TimeUnit.SECONDS);
+                        System.out.println(awaited);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
                     break;
                 }
 
@@ -58,21 +65,15 @@ public class WebScanner implements Runnable, Stoppable {
                 if(this.watchedUrls.containsKey(webUrl)) {
                     continue;
                 }
+                System.out.println("WebUrl: " + webUrl);
 
                 this.watchedUrls.put(webUrl, new Object());
 
                 findOtherUrls(webUrl, hopCount - 1);
 
-                this.completionService.submit(new WebScannerWorker(webUrl, this.keywords));
-
-                try {
-                    Future<Map<String, Integer>> occurrences = this.completionService.take();
-                    WebScanningResultJob resultJob = new WebScanningResultJob(occurrences, webUrl);
-                    this.resultJobs.add(resultJob);
-
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
+                Future<Map<String, Integer>> occurrences = this.completionService.submit(new WebScannerWorker(webUrl, this.keywords));
+                WebScanningResultJob resultJob = new WebScanningResultJob(occurrences, webUrl);
+                this.resultJobs.add(resultJob);
             }
         }
         System.out.println("Web scanner shutting down");
@@ -88,7 +89,17 @@ public class WebScanner implements Runnable, Stoppable {
 
             for(Element link : links) {
                 String newLink = link.attr("abs:href");
-                newLink = remoteQuery(newLink);
+                newLink = removeQuery(newLink);
+
+                System.out.println("Link: " + newLink);
+                try {
+                    System.out.println("Domain: " + newLink.split("/")[2]);
+                    link.attr("abs:domain");
+                    this.availableDomains.put(newLink.split("/")[2], new Object());
+                } catch (IndexOutOfBoundsException e) {
+                    System.out.println("Index out of bounds");
+                }
+
                 if(!this.watchedUrls.containsKey(newLink)) {
                     this.webScanningJobs.add(new WebScanningJob(newLink, hopCount));
                 }
@@ -98,7 +109,7 @@ public class WebScanner implements Runnable, Stoppable {
         }
     }
 
-    private String remoteQuery(String theURL) {
+    private String removeQuery(String theURL) {
         int endPos;
         if (theURL.indexOf("?") > 0) {
             endPos = theURL.indexOf("?");
@@ -114,7 +125,6 @@ public class WebScanner implements Runnable, Stoppable {
     @Override
     public void stop() {
         this.forever = false;
-        this.threadPool.shutdown();
         this.webScanningJobs.add(new WebScanningJob());
     }
 }

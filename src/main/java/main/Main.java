@@ -17,14 +17,13 @@ import java.util.concurrent.*;
 
 public class Main {
 
-//    private static final int MB_SIZE = 1048576;
-
     private static final String PROPERTIES_FILENAME = "src/main/resources/app.properties";
     private static final Properties properties = new Properties();
     private static int hopCount;
 
     private static final Map<String, Object> watchedDirectories = new ConcurrentHashMap<>();
     private static final Map<String, Object> watchedUrls = new ConcurrentHashMap<>();
+    private static final Map<String, Object> availableDomains = new ConcurrentHashMap<>();
 
     private static final ConcurrentLinkedQueue<CrawlerJob> crawlingJobs = new ConcurrentLinkedQueue<>();
     private static final ConcurrentLinkedQueue<Job> scanningJobs = new ConcurrentLinkedQueue<>();
@@ -37,21 +36,6 @@ public class Main {
     private static FileScanner fileScanner;
     private static WebScanner webScanner;
     private static ResultRetriever resultRetriever;
-
-    private static final ExecutorService fileScanningThreadPool = Executors.newCachedThreadPool();
-    private static final ExecutorCompletionService<Map<String, Integer>>
-                                fileScanningCompletionService = new ExecutorCompletionService<>(fileScanningThreadPool);
-
-    private static final ExecutorService webScanningThreadPool = Executors.newCachedThreadPool();
-    private static final ExecutorCompletionService<Map<String, Integer>>
-                                webScanningCompletionService = new ExecutorCompletionService<>(webScanningThreadPool);
-
-    private static final ExecutorService resultRetrieverThreadPool = Executors.newCachedThreadPool();
-
-    private static final ExecutorCompletionService<Map<String, Integer>>
-                                resultRetrieverCompletionService = new ExecutorCompletionService<>(resultRetrieverThreadPool);
-
-
 
     public static void main(String[] args) {
         DebugStream.activate();
@@ -82,8 +66,6 @@ public class Main {
         List<String> keywords = parseKeywords();
         fileScanner = new FileScanner(fileScanningJobs,
                                       resultJobs,
-                                      fileScanningThreadPool,
-                                      fileScanningCompletionService,
                                       fileScanningSizeLimit,
                                       keywords);
         Thread fileScannerThread = new Thread(fileScanner, "FileScanner");
@@ -91,19 +73,17 @@ public class Main {
 
         webScanner = new WebScanner(webScanningJobs,
                                     resultJobs,
-                                    webScanningThreadPool,
-                                    webScanningCompletionService,
                                     watchedUrls,
+                                    availableDomains,
                                     keywords);
         Thread webScannerThread = new Thread(webScanner, "WebScanner");
         webScannerThread.start();
 
         int urlRefreshTime = Integer.parseInt(String.valueOf(properties.get("url_refresh_time")));
         resultRetriever = new ResultRetriever(resultJobs,
-                                              resultRetrieverThreadPool,
-                                              resultRetrieverCompletionService,
                                               watchedDirectories,
                                               watchedUrls,
+                                              availableDomains,
                                               urlRefreshTime);
         Thread resultRetrieverThread = new Thread(resultRetriever, "ResultRetriever");
         resultRetrieverThread.start();
@@ -118,7 +98,15 @@ public class Main {
             String line = sc.nextLine();
 
             if(line.equals("test")) {
-//                resultRetriever.Test();
+                resultRetriever.Test();
+                continue;
+            }
+            if(line.equals("ping")) {
+                System.out.println("pong");
+                continue;
+            }
+            if(line.equals("domains")) {
+                resultRetriever.domains();
                 continue;
             }
 
@@ -133,12 +121,12 @@ public class Main {
             }
 
             if(line.equals("cfs")) {
-//                resultRetriever.clearFileSummary();
+                resultRetriever.clearFileSummary();
                 continue;
             }
 
             if(line.equals("cws")) {
-//                resultRetriever.clearWebSummary();
+                resultRetriever.clearWebSummary();
                 continue;
             }
 
@@ -191,11 +179,15 @@ public class Main {
                 }
 
                 if(param.endsWith("|summary")) {
-//                    Map<String, Integer> result = (param.startsWith("file|")) ? resultRetriever.getFileScanResultSummary() : resultRetriever.getWebScanResultSummary();
-//                    if(result != null) {
-//                        result.forEach((key, value) -> System.out.println(key + ": " + value));
-//                        continue;
-//                    }
+                    Map<String, Map<String, Integer>> result = (param.startsWith("file|")) ?
+                                                                resultRetriever.getFileScanResultSummary() :
+                                                                resultRetriever.getWebScanResultSummary();
+                    if(result != null) {
+                        result.forEach((key, value) -> {
+                            System.out.println(key + ": " + value);
+                        });
+                    }
+                    continue;
                 }
 
                 String corpusName = param.split("\\|")[1];
@@ -209,7 +201,6 @@ public class Main {
                     continue;
                 }
 
-                // Finding for web
                 if(param.startsWith("web|")) {
                     if(corpusName.contains("\\") || corpusName.contains("/") || !corpusName.contains(".")) {
                         System.out.println("Non valid web domain");
@@ -226,6 +217,18 @@ public class Main {
             if(command.equals("query")) {
                 if( !param.startsWith("file|") && !param.startsWith("web|")) {
                     System.out.println("Supported formats: file|corpus_name, web|corpus_name");
+                    continue;
+                }
+
+                if(param.endsWith("|summary")) {
+                    Map<String, Map<String, Integer>> result = param.startsWith("file|") ?
+                                                                null :
+                                                                resultRetriever.queryWebScanResultSummary();
+                    if(result != null) {
+                        result.forEach((key, value) -> {
+                            System.out.println(key + ": " + value);
+                        });
+                    }
                     continue;
                 }
 

@@ -24,14 +24,12 @@ public class FileScanner implements Runnable, Stoppable {
 
     public FileScanner(BlockingQueue<FileScanningJob> fileScanningJobs,
                        ConcurrentLinkedQueue<Job> resultJobs,
-                       ExecutorService threadPool,
-                       ExecutorCompletionService<Map<String, Integer>> completionService,
                        int fileScanningJobLimit,
                        List<String> keywords) {
         this.fileScanningJobs = fileScanningJobs;
         this.resultJobs = resultJobs;
-        this.threadPool = threadPool;
-        this.completionService = completionService;
+        this.threadPool = Executors.newCachedThreadPool();
+        this.completionService = new ExecutorCompletionService<>(this.threadPool);
         this.fileScanningJobLimit = fileScanningJobLimit;
         this.keywords = keywords;
     }
@@ -45,6 +43,7 @@ public class FileScanner implements Runnable, Stoppable {
                 FileScanningJob fileScanningJob = this.fileScanningJobs.poll();
 
                 if(fileScanningJob.isPoisonous()) {
+                    this.threadPool.shutdownNow();
                     break;
                 }
 
@@ -102,12 +101,6 @@ public class FileScanner implements Runnable, Stoppable {
     @Override
     public void stop() {
         this.forever = false;
-        this.threadPool.shutdown();
-        try {
-            this.threadPool.awaitTermination(10, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
         this.fileScanningJobs.add(new FileScanningJob());
     }
 }

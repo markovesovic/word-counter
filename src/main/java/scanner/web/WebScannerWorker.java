@@ -3,6 +3,7 @@ package scanner.web;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,29 +22,29 @@ public class WebScannerWorker implements Callable<Map<String, Integer>> {
     }
 
     @Override
-    public Map<String, Integer> call() {
+    public Map<String, Integer> call() throws Exception {
 
         Map<String, Integer> results = new HashMap<>();
         String webUrl = this.webUrl;
-        Document doc = null;
-        try {
-            doc = Jsoup.connect(webUrl).get();
-        } catch(Exception e) {
-            System.out.println("Url: " + webUrl + " cannot be accessed");
-            return null;
-        }
 
-        assert doc != null;
-        for(String keyword : this.keywords) {
-            String keywordExtended = " " + keyword + " ";
-            Matcher matcher = Pattern.compile(keywordExtended).matcher(doc.outerHtml());
-            int count = 0;
-            while(matcher.find()) {
-                count ++;
+        try {
+            Document doc = Jsoup.connect(webUrl).get();
+
+            for(String keyword : this.keywords) {
+                String keywordExtended = " " + keyword + " ";
+                Matcher matcher = Pattern.compile(keywordExtended).matcher(doc.outerHtml());
+                int count = 0;
+                while(matcher.find()) {
+                    count ++;
+                }
+                results.put(keyword, count);
             }
-            results.put(keyword, count);
+            return results;
+        } catch(IOException e) {
+//            System.out.println("Url: " + webUrl + " cannot be accessed");
+//            return null;
         }
-        return results;
+        return null;
     }
 
 }
