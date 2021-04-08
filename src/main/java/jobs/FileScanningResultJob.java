@@ -12,7 +12,6 @@ public class FileScanningResultJob extends Job {
     private final Map<String, Integer> result;
     private final String corpusName;
 
-    private boolean calculating = false;
 
     public FileScanningResultJob(List<Future<Map<String, Integer>>> futures, String corpusName) {
         super(false);

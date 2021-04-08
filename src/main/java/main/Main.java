@@ -222,7 +222,7 @@ public class Main {
 
                 if(param.endsWith("|summary")) {
                     Map<String, Map<String, Integer>> result = param.startsWith("file|") ?
-                                                                null :
+                                                                resultRetriever.queryFileScanResultSummary() :
                                                                 resultRetriever.queryWebScanResultSummary();
                     if(result != null) {
                         result.forEach((key, value) -> {

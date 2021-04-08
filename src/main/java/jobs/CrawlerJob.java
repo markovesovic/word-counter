@@ -1,6 +1,5 @@
 package jobs;
 
-import main.Poisonable;
 
 public class CrawlerJob extends Job {
 

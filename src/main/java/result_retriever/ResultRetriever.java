@@ -122,39 +122,44 @@ public class ResultRetriever implements Runnable, Stoppable {
         return result;
     }
 
+    public Map<String, Map<String, Integer>> queryFileScanResultSummary() {
+        if(!this.fileScanResultSummary.isEmpty()) {
+            return this.fileScanResultSummary;
+        }
+        boolean isDone = true;
+        for(FileScanningResultJob job : this.pendingFileScanningResultJobs.values()) {
+            if(!job.isReady()) {
+                isDone = false;
+            }
+        }
+        if(!isDone) {
+            System.out.println("Summary is not ready yet");
+            return null;
+        }
+
+        Map<String, Map<String, Integer>> result = new HashMap<>();
+        this.pendingFileScanningResultJobs.forEach((key, value) -> {
+            result.put(key, value.getResult());
+        });
+        this.fileScanResultSummary = new HashMap<>(result);
+
+        return result;
+    }
+
     public Map<String, Integer> getWebScanResult(String domain) {
 
         if(this.cachedDomains.containsKey(domain)) {
             try {
-                System.out.println("Results are cached");
                 return this.cachedDomains.get(domain).get();
             } catch (InterruptedException | ExecutionException e) {
                 e.printStackTrace();
             }
         }
 
-        List<WebScanningResultJob> results = new ArrayList<>();
-        this.pendingWebScanningResultJobs.forEach((key, value) -> {
-            if(key.contains(domain)) {
-                results.add(value);
-            }
-        });
-
-        if(results.isEmpty()) {
-            System.out.println("There are no pages for given domain!");
+        if(this.startWebDomainJob(domain)) {
             return null;
         }
-
-        Future<Map<String, Integer>> future = this.completionService.submit(new DomainMergerWorker(results));
-        this.cachedDomains.put(domain, future);
-        try {
-            return future.get();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        } catch (ExecutionException e) {
-            System.out.println(e.getMessage());
-        }
-        return null;
+        return this.getWebScanResult(domain);
     }
 
     public Map<String, Integer> queryWebScanResult(String domain) {
@@ -163,7 +168,6 @@ public class ResultRetriever implements Runnable, Stoppable {
             Future<Map<String, Integer>> result = this.cachedDomains.get(domain);
             if(result.isDone()) {
                 try {
-                    System.out.println("Results are cached");
                     return result.get();
                 } catch (InterruptedException | ExecutionException e) {
                     e.printStackTrace();
@@ -173,6 +177,13 @@ public class ResultRetriever implements Runnable, Stoppable {
             return null;
         }
 
+        if(this.startWebDomainJob(domain)) {
+            return null;
+        }
+        return this.queryFileScanResult(domain);
+    }
+
+    public boolean startWebDomainJob(String domain) {
         List<WebScanningResultJob> results = new ArrayList<>();
         this.pendingWebScanningResultJobs.forEach((url, job) -> {
             if(url.contains(domain)) {
@@ -182,20 +193,12 @@ public class ResultRetriever implements Runnable, Stoppable {
 
         if(results.isEmpty()) {
             System.out.println("There are no pages for given domain");
+            return true;
         }
 
         Future<Map<String, Integer>> future = this.completionService.submit(new DomainMergerWorker(results));
         this.cachedDomains.put(domain, future);
-        if(future.isDone()) {
-            try {
-                return future.get();
-            } catch (InterruptedException | ExecutionException e) {
-                e.printStackTrace();
-            }
-        }
-        System.out.println("Result is not yet ready");
-
-        return null;
+        return false;
     }
 
     public Map<String, Map<String, Integer>> getWebScanResultSummary() {

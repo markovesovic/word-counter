@@ -51,20 +51,13 @@ public class FileScanner implements Runnable, Stoppable {
 
                 List<List<File>> jobs = divideWork(directoryName);
 
-                for(List<File> job : jobs) {
-                    this.completionService.submit(new FileScannerWorker(job, keywords));
-                }
-
                 List<Future<Map<String, Integer>>> occurrences = new ArrayList<>();
 
-                for(int i = 0; i< jobs.size(); i++) {
-                    try {
-                        Future<Map<String, Integer>> localOccurrences = this.completionService.take();
-                        occurrences.add(localOccurrences);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
+                for(List<File> job : jobs) {
+                    Future<Map<String, Integer>> res = this.completionService.submit(new FileScannerWorker(job, keywords));
+                    occurrences.add(res);
                 }
+
                 directoryName = directoryName.replace("\\", "/");
                 String corpusName = directoryName.split("/")[directoryName.split("/").length - 1];
                 FileScanningResultJob resultJob = new FileScanningResultJob(occurrences, corpusName);
