@@ -11,6 +11,7 @@ import scanner.web.WebScanner;
 
 import java.io.*;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.*;
@@ -25,11 +26,11 @@ public class Main {
     private static final Map<String, Object> watchedUrls = new ConcurrentHashMap<>();
     private static final Map<String, Object> availableDomains = new ConcurrentHashMap<>();
 
-    private static final ConcurrentLinkedQueue<CrawlerJob> crawlingJobs = new ConcurrentLinkedQueue<>();
-    private static final ConcurrentLinkedQueue<Job> scanningJobs = new ConcurrentLinkedQueue<>();
+    private static final BlockingQueue<CrawlerJob> crawlingJobs = new LinkedBlockingQueue<>();
+    private static final BlockingQueue<Job> scanningJobs = new LinkedBlockingQueue<>();
     private static final BlockingQueue<FileScanningJob> fileScanningJobs = new LinkedBlockingQueue<>();
     private static final BlockingQueue<WebScanningJob> webScanningJobs = new LinkedBlockingQueue<>();
-    private static final ConcurrentLinkedQueue<Job> resultJobs = new ConcurrentLinkedQueue<>();
+    private static final BlockingQueue<Job> resultJobs = new LinkedBlockingQueue<>();
 
     private static DirectoryCrawler directoryCrawler;
     private static JobDispatcher jobDispatcher;
@@ -44,6 +45,8 @@ public class Main {
         forever();
     }
 
+
+    // TODO: Poll -> Take
     private static void initWorkers() {
 
         String fileCorpusPrefix = (String) properties.get("file_corpus_prefix");
@@ -81,7 +84,6 @@ public class Main {
 
         int urlRefreshTime = Integer.parseInt(String.valueOf(properties.get("url_refresh_time")));
         resultRetriever = new ResultRetriever(resultJobs,
-                                              watchedDirectories,
                                               watchedUrls,
                                               availableDomains,
                                               urlRefreshTime);
@@ -150,13 +152,18 @@ public class Main {
             String param = line.split(" ")[1];
 
             if(command.equals("ad")) {
-                String dirName = "src/main/resources/" + param;
-                if(Files.notExists(Path.of(dirName))) {
-                    System.out.println("Could not find dir: " + dirName);
-                    continue;
+                try {
+                    String dirName = "src/main/resources/" + param;
+
+                    if (Files.notExists(Path.of(dirName))) {
+                        System.out.println("Could not find dir: " + dirName);
+                        continue;
+                    }
+                    CrawlerJob crawlerJob = new CrawlerJob(dirName);
+                    crawlingJobs.add(crawlerJob);
+                } catch (InvalidPathException e) {
+                    System.out.println("Invalid path name");
                 }
-                CrawlerJob crawlerJob = new CrawlerJob(dirName);
-                crawlingJobs.add(crawlerJob);
             }
 
             if(command.equals("aw")) {
@@ -257,6 +264,7 @@ public class Main {
         sc.close();
 
         System.out.println("Main shutting down");
+        System.out.println("Waiting for thread pools to finish");
     }
 
     private static void loadProperties() {

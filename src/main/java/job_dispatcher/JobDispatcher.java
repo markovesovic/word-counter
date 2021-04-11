@@ -7,16 +7,17 @@ import main.Stoppable;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class JobDispatcher implements Runnable, Stoppable {
 
-    private final ConcurrentLinkedQueue<Job> jobs;
+    private final BlockingQueue<Job> jobs;
     private final BlockingQueue<FileScanningJob> fileScanningJobs;
     private final BlockingQueue<WebScanningJob> webScanningJobs;
 
     private volatile boolean forever = true;
 
-    public JobDispatcher(ConcurrentLinkedQueue<Job> jobs,
+    public JobDispatcher(BlockingQueue<Job> jobs,
                          BlockingQueue<FileScanningJob> fileScanningJobs,
                          BlockingQueue<WebScanningJob> webScanningJobs) {
         this.jobs = jobs;
@@ -30,28 +31,26 @@ public class JobDispatcher implements Runnable, Stoppable {
 
             while(!this.jobs.isEmpty()) {
 
-                Job job = this.jobs.poll();
-
-                if(job.isPoisonous()) {
-                    break;
+                Job job = null;
+                try {
+                    job = this.jobs.take();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
                 }
 
-                if(job instanceof FileScanningJob) {
-                    this.fileScanningJobs.add((FileScanningJob) job);
-                }
+                if(job != null) {
+                    if(job.isPoisonous()) {
+                        break;
+                    }
 
-                if(job instanceof WebScanningJob) {
-                    this.webScanningJobs.add((WebScanningJob) job);
-                }
-            }
+                    if(job instanceof FileScanningJob) {
+                        this.fileScanningJobs.add((FileScanningJob) job);
+                    }
 
-            // Sleep
-            try {
-                synchronized (this) {
-                    wait(200);
+                    if(job instanceof WebScanningJob) {
+                        this.webScanningJobs.add((WebScanningJob) job);
+                    }
                 }
-            } catch (InterruptedException e) {
-                e.printStackTrace();
             }
         }
         System.out.println("Job dispatcher shutting down");

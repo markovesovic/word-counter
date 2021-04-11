@@ -16,7 +16,7 @@ public class ResultRetriever implements Runnable, Stoppable {
 
     private final int urlRefreshTime;
 
-    private final ConcurrentLinkedQueue<Job> resultJobs;
+    private final BlockingQueue<Job> resultJobs;
     private final ExecutorService threadPool;
     private final ExecutorCompletionService<Map<String, Integer>> completionService;
 
@@ -27,13 +27,12 @@ public class ResultRetriever implements Runnable, Stoppable {
     private final Map<String, WebScanningResultJob> pendingWebScanningResultJobs;
     private final Map<String, Future<Map<String, Integer>>> cachedDomains;
 
-    private Map<String, Map<String, Integer>> fileScanResultSummary;
-    private Map<String, Future<Map<String, Integer>>> webScanResultSummary;
+    private final Map<String, Map<String, Integer>> fileScanResultSummary;
+    private final Map<String, Future<Map<String, Integer>>> webScanResultSummary;
 
     private final ScheduledExecutorService cron;
 
-    public ResultRetriever(ConcurrentLinkedQueue<Job> resultJobs,
-                           Map<String, Object> watchedDirectories,
+    public ResultRetriever(BlockingQueue<Job> resultJobs,
                            Map<String, Object> watchedUrls,
                            Map<String, Object> availableDomains,
                            int urlRefreshTime) {
@@ -65,7 +64,15 @@ public class ResultRetriever implements Runnable, Stoppable {
 
             while(!this.resultJobs.isEmpty()) {
 
-                Job resultJob = this.resultJobs.poll();
+                Job resultJob = null;
+                try {
+                    resultJob = this.resultJobs.take();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                if(resultJob == null) {
+                    continue;
+                }
 
                 if(resultJob.isPoisonous()) {
                     break;
@@ -75,7 +82,7 @@ public class ResultRetriever implements Runnable, Stoppable {
                     this.pendingFileScanningResultJobs.put(((FileScanningResultJob) resultJob).getCorpusName(), (FileScanningResultJob) resultJob);
                 }
                 if(resultJob instanceof WebScanningResultJob) {
-                    this.pendingWebScanningResultJobs.put(((WebScanningResultJob) resultJob).getWebUrl(), (WebScanningResultJob) resultJob);
+                    this.pendingWebScanningResultJobs.put(((WebScanningResultJob) resultJob).getDomain(), (WebScanningResultJob) resultJob);
                 }
             }
         }
@@ -117,7 +124,7 @@ public class ResultRetriever implements Runnable, Stoppable {
         this.pendingFileScanningResultJobs.forEach((key, value) -> {
             result.put(key, value.getResult());
         });
-        this.fileScanResultSummary = new HashMap<>(result);
+        this.fileScanResultSummary.putAll(result);
 
         return result;
     }
@@ -141,7 +148,7 @@ public class ResultRetriever implements Runnable, Stoppable {
         this.pendingFileScanningResultJobs.forEach((key, value) -> {
             result.put(key, value.getResult());
         });
-        this.fileScanResultSummary = new HashMap<>(result);
+        this.fileScanResultSummary.putAll(result);
 
         return result;
     }
@@ -294,6 +301,11 @@ public class ResultRetriever implements Runnable, Stoppable {
         });
     }
 
+    public void allWebResults() {
+        this.pendingWebScanningResultJobs.forEach((key, value) -> {
+
+        });
+    }
 
     public void clearFileSummary() {
         this.fileScanResultSummary.clear();

@@ -10,12 +10,14 @@ public class WebScanningResultJob extends Job {
     private final Future<Map<String, Integer>> future;
     private final Map<String, Integer> result;
     private final String webUrl;
+    private final String domain;
 
-    public WebScanningResultJob(Future<Map<String, Integer>> future, String webUrl) {
+    public WebScanningResultJob(Future<Map<String, Integer>> future, String webUrl, String domain) {
         super(false);
         this.future = future;
         this.result = new HashMap<>();
         this.webUrl = webUrl;
+        this.domain = domain;
     }
 
     public Map<String, Integer> getResult() {
@@ -45,6 +47,10 @@ public class WebScanningResultJob extends Job {
 
     public String getWebUrl() {
         return this.webUrl;
+    }
+
+    public String getDomain() {
+        return this.domain;
     }
 
 }

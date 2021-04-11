@@ -14,7 +14,7 @@ import java.util.concurrent.*;
 public class FileScanner implements Runnable, Stoppable {
 
     private final BlockingQueue<FileScanningJob> fileScanningJobs;
-    private final ConcurrentLinkedQueue<Job> resultJobs;
+    private final BlockingQueue<Job> resultJobs;
     private final ExecutorService threadPool;
     private final ExecutorCompletionService<Map<String, Integer>> completionService;
     private final int fileScanningJobLimit;
@@ -23,7 +23,7 @@ public class FileScanner implements Runnable, Stoppable {
     private volatile boolean forever = true;
 
     public FileScanner(BlockingQueue<FileScanningJob> fileScanningJobs,
-                       ConcurrentLinkedQueue<Job> resultJobs,
+                       BlockingQueue<Job> resultJobs,
                        int fileScanningJobLimit,
                        List<String> keywords) {
         this.fileScanningJobs = fileScanningJobs;
@@ -40,7 +40,16 @@ public class FileScanner implements Runnable, Stoppable {
         while(this.forever) {
 
             while(!this.fileScanningJobs.isEmpty()) {
-                FileScanningJob fileScanningJob = this.fileScanningJobs.poll();
+                FileScanningJob fileScanningJob = null;
+                try {
+                    fileScanningJob = this.fileScanningJobs.take();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+
+                if(fileScanningJob == null) {
+                    continue;
+                }
 
                 if(fileScanningJob.isPoisonous()) {
                     this.threadPool.shutdownNow();

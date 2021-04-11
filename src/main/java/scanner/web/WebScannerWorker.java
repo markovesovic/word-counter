@@ -41,10 +41,10 @@ public class WebScannerWorker implements Callable<Map<String, Integer>> {
             }
             return results;
         } catch(IOException e) {
-//            System.out.println("Url: " + webUrl + " cannot be accessed");
-//            return null;
+            System.out.println("Url: " + webUrl + " cannot be accessed");
         }
         return null;
     }
+
 
 }

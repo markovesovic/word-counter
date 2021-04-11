@@ -18,7 +18,7 @@ import java.util.concurrent.*;
 public class WebScanner implements Runnable, Stoppable {
 
     private final BlockingQueue<WebScanningJob> webScanningJobs;
-    private final ConcurrentLinkedQueue<Job> resultJobs;
+    private final BlockingQueue<Job> resultJobs;
     private final ExecutorService threadPool;
     private final ExecutorCompletionService<Map<String, Integer>> completionService;
     private final Map<String, Object> watchedUrls;
@@ -28,7 +28,7 @@ public class WebScanner implements Runnable, Stoppable {
     private volatile boolean forever = true;
 
     public WebScanner(BlockingQueue<WebScanningJob> webScanningJobs,
-                      ConcurrentLinkedQueue<Job> resultJobs,
+                      BlockingQueue<Job> resultJobs,
                       Map<String, Object> watchedUrls,
                       Map<String, Object> availableDomains,
                       List<String> keywords) {
@@ -47,9 +47,17 @@ public class WebScanner implements Runnable, Stoppable {
 
             while(!this.webScanningJobs.isEmpty()) {
 
-                WebScanningJob job = this.webScanningJobs.poll();
+                WebScanningJob webScanningJob = null;
+                try {
+                    webScanningJob = this.webScanningJobs.take();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                if(webScanningJob == null) {
+                    continue;
+                }
 
-                if(job.isPoisonous()) {
+                if(webScanningJob.isPoisonous()) {
                     try {
                         boolean awaited = this.threadPool.awaitTermination(10, TimeUnit.SECONDS);
                         System.out.println(awaited);
@@ -59,8 +67,8 @@ public class WebScanner implements Runnable, Stoppable {
                     break;
                 }
 
-                String webUrl = job.getUrl();
-                int hopCount = job.getHopCount();
+                String webUrl = webScanningJob.getUrl();
+                int hopCount = webScanningJob.getHopCount();
 
                 if(this.watchedUrls.containsKey(webUrl)) {
                     continue;
@@ -72,7 +80,7 @@ public class WebScanner implements Runnable, Stoppable {
                 findOtherUrls(webUrl, hopCount - 1);
 
                 Future<Map<String, Integer>> occurrences = this.completionService.submit(new WebScannerWorker(webUrl, this.keywords));
-                WebScanningResultJob resultJob = new WebScanningResultJob(occurrences, webUrl);
+                WebScanningResultJob resultJob = new WebScanningResultJob(occurrences, webUrl, webUrl.split("/")[2]);
                 this.resultJobs.add(resultJob);
             }
         }
@@ -96,12 +104,12 @@ public class WebScanner implements Runnable, Stoppable {
                     System.out.println("Domain: " + newLink.split("/")[2]);
                     link.attr("abs:domain");
                     this.availableDomains.put(newLink.split("/")[2], new Object());
-                } catch (IndexOutOfBoundsException e) {
-                    System.out.println("Index out of bounds");
-                }
 
-                if(!this.watchedUrls.containsKey(newLink)) {
-                    this.webScanningJobs.add(new WebScanningJob(newLink, hopCount));
+                    if(!this.watchedUrls.containsKey(newLink)) {
+                        this.webScanningJobs.add(new WebScanningJob(newLink, hopCount));
+                    }
+                } catch (IndexOutOfBoundsException e) {
+                    System.out.println("Cannot find domain for: " + newLink);
                 }
             }
         } catch (IOException e) {

@@ -11,12 +11,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class DirectoryCrawler implements Stoppable, Runnable {
 
-    private final ConcurrentLinkedQueue<CrawlerJob> crawlingJobs;
-    private final ConcurrentLinkedQueue<Job> jobs;
+    private final BlockingQueue<CrawlerJob> crawlingJobs;
+    private final BlockingQueue<Job> jobs;
     private final Map<String, Object> watchedDirectories;
     private final String fileCorpusPrefix;
     private final int dirCrawlerSleepTime;
@@ -24,8 +27,8 @@ public class DirectoryCrawler implements Stoppable, Runnable {
     private final HashMap<String, Long> lastModifiedValueForFiles = new HashMap<>();
     private boolean forever = true;
 
-    public DirectoryCrawler(ConcurrentLinkedQueue<CrawlerJob> crawlingJobs,
-                            ConcurrentLinkedQueue<Job> jobs,
+    public DirectoryCrawler(BlockingQueue<CrawlerJob> crawlingJobs,
+                            BlockingQueue<Job> jobs,
                             Map<String, Object> watchedDirectories, String fileCorpusPrefix,
                             int dirCrawlerSleepTime) {
 
@@ -43,18 +46,24 @@ public class DirectoryCrawler implements Stoppable, Runnable {
             while(!this.crawlingJobs.isEmpty()) {
 
                 // Get directory name
-                CrawlerJob crawlerJob = this.crawlingJobs.poll();
-                assert crawlerJob != null;
-                String directoryName = crawlerJob.getDirectoryName();
-
-                if(crawlerJob.isPoisonous()) {
-                    break;
+                CrawlerJob crawlerJob = null;
+                try {
+                    crawlerJob = this.crawlingJobs.take();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
                 }
+                if(crawlerJob != null) {
+                    String directoryName = crawlerJob.getDirectoryName();
 
-                // Search for all suitable subdirectories
-                this.searchDir(directoryName);
-                // Add this directory to be tracked forever for changes
-                this.crawlingJobs.add(crawlerJob);
+                    if(crawlerJob.isPoisonous()) {
+                        break;
+                    }
+
+                    // Search for all suitable subdirectories
+                    this.searchDir(directoryName);
+                    // Add this directory to be tracked forever for changes
+                    this.crawlingJobs.add(crawlerJob);
+                }
 
                 // Sleep for fixed time
                 try {
