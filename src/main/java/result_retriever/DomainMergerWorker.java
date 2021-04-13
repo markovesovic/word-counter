@@ -16,15 +16,13 @@ public class DomainMergerWorker implements Callable<Map<String, Integer>> {
     }
 
     @Override
-    public Map<String, Integer> call() throws Exception {
+    public Map<String, Integer> call() {
 
         Map<String, Integer> result = new HashMap<>();
         this.jobs.forEach(job -> {
             Map<String, Integer> res = job.getResult();
             if(res != null) {
-                res.forEach((key, value) -> {
-                    result.merge(key, value, Integer::sum);
-                });
+                res.forEach((key, value) -> result.merge(key, value, Integer::sum));
             }
         });
 

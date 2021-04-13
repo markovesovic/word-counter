@@ -103,7 +103,11 @@ public class WebScanner implements Runnable, Stoppable {
                 try {
                     System.out.println("Domain: " + newLink.split("/")[2]);
                     link.attr("abs:domain");
-                    this.availableDomains.put(newLink.split("/")[2], new Object());
+                    String domain = newLink.split("/")[2];
+                    if(domain.startsWith("www.")) {
+                        domain = domain.substring(4);
+                    }
+                    this.availableDomains.put(domain, new Object());
 
                     if(!this.watchedUrls.containsKey(newLink)) {
                         this.webScanningJobs.add(new WebScanningJob(newLink, hopCount));

@@ -82,7 +82,7 @@ public class ResultRetriever implements Runnable, Stoppable {
                     this.pendingFileScanningResultJobs.put(((FileScanningResultJob) resultJob).getCorpusName(), (FileScanningResultJob) resultJob);
                 }
                 if(resultJob instanceof WebScanningResultJob) {
-                    this.pendingWebScanningResultJobs.put(((WebScanningResultJob) resultJob).getDomain(), (WebScanningResultJob) resultJob);
+                    this.pendingWebScanningResultJobs.put(((WebScanningResultJob) resultJob).getWebUrl(), (WebScanningResultJob) resultJob);
                 }
             }
         }
@@ -121,9 +121,7 @@ public class ResultRetriever implements Runnable, Stoppable {
 
         Map<String, Map<String, Integer>> result = new HashMap<>();
 
-        this.pendingFileScanningResultJobs.forEach((key, value) -> {
-            result.put(key, value.getResult());
-        });
+        this.pendingFileScanningResultJobs.forEach((key, value) -> result.put(key, value.getResult()));
         this.fileScanResultSummary.putAll(result);
 
         return result;
@@ -145,9 +143,7 @@ public class ResultRetriever implements Runnable, Stoppable {
         }
 
         Map<String, Map<String, Integer>> result = new HashMap<>();
-        this.pendingFileScanningResultJobs.forEach((key, value) -> {
-            result.put(key, value.getResult());
-        });
+        this.pendingFileScanningResultJobs.forEach((key, value) -> result.put(key, value.getResult()));
         this.fileScanResultSummary.putAll(result);
 
         return result;
@@ -187,13 +183,15 @@ public class ResultRetriever implements Runnable, Stoppable {
         if(this.startWebDomainJob(domain)) {
             return null;
         }
-        return this.queryFileScanResult(domain);
+        return this.queryWebScanResult(domain);
     }
 
     public boolean startWebDomainJob(String domain) {
         List<WebScanningResultJob> results = new ArrayList<>();
+
         this.pendingWebScanningResultJobs.forEach((url, job) -> {
-            if(url.contains(domain)) {
+            String urlDomain = url.split("/")[2];
+            if(urlDomain.equals(domain) || urlDomain.equals("www." + domain)) {
                 results.add(job);
             }
         });
@@ -260,14 +258,13 @@ public class ResultRetriever implements Runnable, Stoppable {
     private void startWebSummaryJob() {
         Map<String, List<WebScanningResultJob>> data = new HashMap<>();
 
-        this.availableDomains.forEach((domain, o) -> {
-            data.put(domain, new ArrayList<>());
-        });
+        this.availableDomains.forEach((domain, o) -> data.put(domain, new ArrayList<>()));
 
         this.pendingWebScanningResultJobs.forEach((url, job) -> {
             String matchingDomain = "";
+            String urlDomain = url.split("/")[2];
             for (String domainName : this.availableDomains.keySet()) {
-                if (url.contains(domainName)) {
+                if (urlDomain.equals(domainName) || urlDomain.equals("www." + domainName)) {
                     matchingDomain = domainName;
                     break;
                 }
@@ -296,15 +293,11 @@ public class ResultRetriever implements Runnable, Stoppable {
     }
 
     public void domains() {
-        this.availableDomains.forEach((key, value) -> {
-            System.out.println(key);
-        });
+        this.availableDomains.forEach((key, value) -> System.out.println(key));
     }
 
     public void allWebResults() {
-        this.pendingWebScanningResultJobs.forEach((key, value) -> {
-
-        });
+        this.pendingWebScanningResultJobs.forEach((key, value) -> System.out.println(key + ": " + value.getResult()));
     }
 
     public void clearFileSummary() {

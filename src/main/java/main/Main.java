@@ -99,6 +99,11 @@ public class Main {
         while(true) {
             String line = sc.nextLine();
 
+            if(line.equals("allweb")) {
+                resultRetriever.allWebResults();
+                continue;
+            }
+
             if(line.equals("test")) {
                 resultRetriever.Test();
                 continue;
