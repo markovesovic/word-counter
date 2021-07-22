@@ -1,2 +1,2 @@
-# KiDS_domaci_1
+# Word counter
 Prvi domaci iz konkurentnih i distribuiranih sistema
